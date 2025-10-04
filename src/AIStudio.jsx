@@ -44,6 +44,8 @@ import {
   Star as StarIcon,
   StarBorder as StarBorderIcon
 } from '@mui/icons-material';
+import { generateImage, trainStyleModel } from './utils/aiUtils';
+import { CircularProgress } from '@mui/material';
 
 const AIStudio = () => {
   const [activeTab, setActiveTab] = useState(0);
@@ -55,6 +57,8 @@ const AIStudio = () => {
   const [generatedTexts, setGeneratedTexts] = useState([]);
   const [styleTransferDialog, setStyleTransferDialog] = useState(false);
   const [batchGenerateDialog, setBatchGenerateDialog] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [styleImages, setStyleImages] = useState([]);
 
   const styles = [
     { id: 'realistic', name: 'Realistic', description: 'Photorealistic images' },
@@ -90,8 +94,16 @@ const AIStudio = () => {
     setActiveTab(newValue);
   };
 
-  const handleGenerateImage = () => {
+  const handleTrainStyle = async () => {
+    // In a real application, you would get the images from a file input
+    const loraModel = await trainStyleModel(styleImages);
+    console.log('Trained LoRA model:', loraModel);
+  };
+
+  const handleGenerateImage = async () => {
     if (!imagePrompt.trim()) return;
+    setLoading(true);
+    const imageUrl = await generateImage(imagePrompt);
     
     const newImage = {
       id: Date.now(),
@@ -99,11 +111,12 @@ const AIStudio = () => {
       style: selectedStyle,
       quality: imageQuality,
       timestamp: new Date().toLocaleString(),
-      url: `https://via.placeholder.com/512x512/4CAF50/white?text=Generated+Image+${generatedImages.length + 1}`
+      url: imageUrl
     };
     
     setGeneratedImages([newImage, ...generatedImages]);
     setImagePrompt('');
+    setLoading(false);
   };
 
   const handleGenerateText = () => {
@@ -192,10 +205,10 @@ const AIStudio = () => {
                   variant="contained"
                   startIcon={<AutoAwesomeIcon />}
                   onClick={handleGenerateImage}
-                  disabled={!imagePrompt.trim()}
+                  disabled={!imagePrompt.trim() || loading}
                   sx={{ background: 'linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%)' }}
                 >
-                  Generate Image
+                  {loading ? <CircularProgress size={24} /> : 'Generate Image'}
                 </Button>
                 <Button
                   variant="outlined"
@@ -205,6 +218,20 @@ const AIStudio = () => {
                   Clear
                 </Button>
               </Box>
+            </CardContent>
+          </Card>
+
+          <Card sx={{ marginBottom: '20px' }}>
+            <CardContent>
+                <Typography variant="h6" gutterBottom>
+                    Train Style Model
+                </Typography>
+                <input
+                    type="file"
+                    multiple
+                    onChange={(e) => setStyleImages(Array.from(e.target.files))}
+                />
+                <Button onClick={handleTrainStyle}>Train Style</Button>
             </CardContent>
           </Card>
 
