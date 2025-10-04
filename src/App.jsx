@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { Box, Tab, Tabs, Typography } from '@mui/material';
-import PageComposer from './PageComposer';
+import ProjectComposer from './ProjectComposer';
 import Editor from './Editor';
 import PanelManager from './PanelManager';
+import StoryManager from './StoryManager';
+import AssetManager from './AssetManager';
+import AIStudio from './AIStudio';
 
 function App() {
   const [view, setView] = useState('editor');
@@ -25,29 +28,29 @@ function App() {
         padding: '0 40px',
         boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
       }}>
-        <Typography 
-          variant="h3" 
-          sx={{ 
-            color: 'white', 
-            padding: '30px 0 20px 0', 
-            textAlign: 'center',
-            fontWeight: 'bold',
-            textShadow: '0 2px 4px rgba(0,0,0,0.3)'
-          }}
-        >
-          Comic Builder Pro
-        </Typography>
-        <Typography 
-          variant="h6" 
-          sx={{ 
-            color: 'rgba(255, 255, 255, 0.8)', 
-            textAlign: 'center',
-            marginBottom: '20px',
-            fontWeight: '300'
-          }}
-        >
-          Create Professional Comic Panels with Taped Transcripts
-        </Typography>
+            <Typography
+              variant="h3"
+              sx={{
+                color: 'white',
+                padding: '30px 0 20px 0',
+                textAlign: 'center',
+                fontWeight: 'bold',
+                textShadow: '0 2px 4px rgba(0,0,0,0.3)'
+              }}
+            >
+              Chronicle Crafter
+            </Typography>
+            <Typography
+              variant="h6"
+              sx={{
+                color: 'rgba(255, 255, 255, 0.8)',
+                textAlign: 'center',
+                marginBottom: '20px',
+                fontWeight: '300'
+              }}
+            >
+              Professional Media Creation Platform for Comics, Visual Novels & Ebooks
+            </Typography>
             <Tabs
               value={view}
               onChange={handleChange}
@@ -71,14 +74,18 @@ function App() {
                 }
               }}
             >
+              <Tab label="Story Manager" value="story" />
+              <Tab label="Asset Manager" value="assets" />
+              <Tab label="AI Studio" value="ai" />
               <Tab label="Panel Editor" value="editor" />
-              <Tab label="Panel Manager" value="manager" />
-              <Tab label="Page Composer" value="composer" />
+              <Tab label="Project Composer" value="composer" />
             </Tabs>
       </Box>
+      {view === 'story' && <StoryManager />}
+      {view === 'assets' && <AssetManager />}
+      {view === 'ai' && <AIStudio />}
       {view === 'editor' && <Editor />}
-      {view === 'manager' && <PanelManager />}
-      {view === 'composer' && <PageComposer />}
+      {view === 'composer' && <ProjectComposer />}
     </Box>
   );
 }

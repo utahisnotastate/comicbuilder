@@ -2,14 +2,14 @@
 import React, { useState } from 'react';
 import { usePanelStore } from './store';
 import { parseDialogueText, generateTapePositions, generateDialoguePositions } from './utils/dialogueParser';
-import { 
-  Button, 
-  Select, 
-  MenuItem, 
-  FormControl, 
-  InputLabel, 
-  Paper, 
-  Typography, 
+import {
+  Button,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Paper,
+  Typography,
   Box,
   TextField,
   IconButton,
@@ -19,7 +19,12 @@ import {
   Divider,
   Chip,
   Alert,
-  Collapse
+  Collapse,
+  Slider,
+  Switch,
+  FormControlLabel,
+  Grid,
+  Stack
 } from '@mui/material';
 import AddCommentIcon from '@mui/icons-material/AddComment';
 import NoteAddIcon from '@mui/icons-material/NoteAdd';
@@ -31,6 +36,15 @@ import TextSnippetIcon from '@mui/icons-material/TextSnippet';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import PaletteIcon from '@mui/icons-material/Palette';
+import LayersIcon from '@mui/icons-material/Layers';
+import FormatSizeIcon from '@mui/icons-material/FormatSize';
+import BorderColorIcon from '@mui/icons-material/BorderColor';
+import BubbleChartIcon from '@mui/icons-material/BubbleChart';
+import MusicNoteIcon from '@mui/icons-material/MusicNote';
+import GridOnIcon from '@mui/icons-material/GridOn';
+import ViewInArIcon from '@mui/icons-material/ViewInAr';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 const paperTextures = {
   'Subtle Paper': 'url("https://www.transparenttextures.com/patterns/paper.png")',
@@ -59,6 +73,12 @@ const ControlPanel = ({ onExport }) => {
   const [dialogueText, setDialogueText] = useState('');
   const [showDialogueInput, setShowDialogueInput] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showLayers, setShowLayers] = useState(false);
+  const [showTypography, setShowTypography] = useState(false);
+  const [showEffects, setShowEffects] = useState(false);
+  const [panelOpacity, setPanelOpacity] = useState(100);
+  const [panelBlur, setPanelBlur] = useState(0);
+  const [dialogueOpacity, setDialogueOpacity] = useState(100);
 
   const handleImageChange = (event) => {
     const file = event.target.files[0];
@@ -350,49 +370,223 @@ const ControlPanel = ({ onExport }) => {
             </CardContent>
           </Card>
 
-      {/* Advanced Settings */}
-      <Card>
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '15px' }}>
-            <Typography variant="h6">Advanced Settings</Typography>
-            <IconButton onClick={() => setShowAdvanced(!showAdvanced)}>
-              {showAdvanced ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-            </IconButton>
-          </Box>
+          {/* Advanced Settings */}
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '15px' }}>
+                <Typography variant="h6">Advanced Settings</Typography>
+                <IconButton onClick={() => setShowAdvanced(!showAdvanced)}>
+                  {showAdvanced ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                </IconButton>
+              </Box>
 
-          <Collapse in={showAdvanced}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              <FormControl fullWidth>
-                <InputLabel id="font-select-label">Font Style</InputLabel>
-                <Select
-                  labelId="font-select-label"
-                  value={activePanel.font}
-                  label="Font Style"
-                  onChange={(e) => updatePanelStyle({ font: e.target.value })}
-                >
-                  {Object.entries(fonts).map(([name, value]) => (
-                    <MenuItem key={name} value={value}>{name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Collapse in={showAdvanced}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                  <FormControl fullWidth>
+                    <InputLabel id="font-select-label">Font Style</InputLabel>
+                    <Select
+                      labelId="font-select-label"
+                      value={activePanel.font}
+                      label="Font Style"
+                      onChange={(e) => updatePanelStyle({ font: e.target.value })}
+                    >
+                      {Object.entries(fonts).map(([name, value]) => (
+                        <MenuItem key={name} value={value}>{name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
 
-              <FormControl fullWidth>
-                <InputLabel id="texture-select-label">Paper Texture</InputLabel>
-                <Select
-                  labelId="texture-select-label"
-                  value={activePanel.paperTexture}
-                  label="Paper Texture"
-                  onChange={(e) => updatePanelStyle({ paperTexture: e.target.value })}
-                >
-                  {Object.entries(paperTextures).map(([name, value]) => (
-                    <MenuItem key={name} value={value}>{name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
-          </Collapse>
-        </CardContent>
-      </Card>
+                  <FormControl fullWidth>
+                    <InputLabel id="texture-select-label">Paper Texture</InputLabel>
+                    <Select
+                      labelId="texture-select-label"
+                      value={activePanel.paperTexture}
+                      label="Paper Texture"
+                      onChange={(e) => updatePanelStyle({ paperTexture: e.target.value })}
+                    >
+                      {Object.entries(paperTextures).map(([name, value]) => (
+                        <MenuItem key={name} value={value}>{name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Box>
+              </Collapse>
+            </CardContent>
+          </Card>
+
+          {/* Typography Controls */}
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '15px' }}>
+                <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FormatSizeIcon color="primary" />
+                  Typography
+                </Typography>
+                <IconButton onClick={() => setShowTypography(!showTypography)}>
+                  {showTypography ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                </IconButton>
+              </Box>
+
+              <Collapse in={showTypography}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <TextField
+                        label="Character Name Size"
+                        type="number"
+                        defaultValue="16"
+                        size="small"
+                        fullWidth
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <TextField
+                        label="Dialogue Size"
+                        type="number"
+                        defaultValue="14"
+                        size="small"
+                        fullWidth
+                      />
+                    </Grid>
+                  </Grid>
+                  
+                  <FormControl fullWidth>
+                    <InputLabel>Speech Bubble Style</InputLabel>
+                    <Select label="Speech Bubble Style" defaultValue="rounded">
+                      <MenuItem value="rounded">Rounded</MenuItem>
+                      <MenuItem value="sharp">Sharp Corners</MenuItem>
+                      <MenuItem value="cloud">Cloud Shape</MenuItem>
+                      <MenuItem value="thought">Thought Bubble</MenuItem>
+                    </Select>
+                  </FormControl>
+
+                  <Box>
+                    <Typography gutterBottom>Dialogue Opacity: {dialogueOpacity}%</Typography>
+                    <Slider
+                      value={dialogueOpacity}
+                      onChange={(e, value) => setDialogueOpacity(value)}
+                      min={0}
+                      max={100}
+                      step={5}
+                    />
+                  </Box>
+                </Box>
+              </Collapse>
+            </CardContent>
+          </Card>
+
+          {/* Layer Management */}
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '15px' }}>
+                <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <LayersIcon color="primary" />
+                  Layer Management
+                </Typography>
+                <IconButton onClick={() => setShowLayers(!showLayers)}>
+                  {showLayers ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                </IconButton>
+              </Box>
+
+              <Collapse in={showLayers}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                  <Typography variant="subtitle2">Panel Elements</Typography>
+                  <Stack spacing={1}>
+                    {activePanel.elements.map((element, index) => (
+                      <Box key={element.id} sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'space-between',
+                        padding: '8px',
+                        backgroundColor: '#f5f5f5',
+                        borderRadius: '4px'
+                      }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {element.type === 'dialogue' ? <BubbleChartIcon /> : <NoteAddIcon />}
+                          <Typography variant="body2">
+                            {element.type === 'dialogue' ? element.character : 'Tape'} {index + 1}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: '5px' }}>
+                          <Tooltip title="Move Up">
+                            <IconButton size="small">
+                              <ExpandLessIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Move Down">
+                            <IconButton size="small">
+                              <ExpandMoreIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete">
+                            <IconButton size="small" color="error">
+                              <DeleteIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </Box>
+                    ))}
+                  </Stack>
+                </Box>
+              </Collapse>
+            </CardContent>
+          </Card>
+
+          {/* Visual Effects */}
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '15px' }}>
+                <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <PaletteIcon color="primary" />
+                  Visual Effects
+                </Typography>
+                <IconButton onClick={() => setShowEffects(!showEffects)}>
+                  {showEffects ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                </IconButton>
+              </Box>
+
+              <Collapse in={showEffects}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                  <Box>
+                    <Typography gutterBottom>Panel Opacity: {panelOpacity}%</Typography>
+                    <Slider
+                      value={panelOpacity}
+                      onChange={(e, value) => setPanelOpacity(value)}
+                      min={0}
+                      max={100}
+                      step={5}
+                    />
+                  </Box>
+
+                  <Box>
+                    <Typography gutterBottom>Background Blur: {panelBlur}px</Typography>
+                    <Slider
+                      value={panelBlur}
+                      onChange={(e, value) => setPanelBlur(value)}
+                      min={0}
+                      max={20}
+                      step={1}
+                    />
+                  </Box>
+
+                  <FormControlLabel
+                    control={<Switch defaultChecked />}
+                    label="Enable Drop Shadow"
+                  />
+
+                  <FormControlLabel
+                    control={<Switch />}
+                    label="Enable Inner Glow"
+                  />
+
+                  <FormControlLabel
+                    control={<Switch />}
+                    label="Enable Border Effect"
+                  />
+                </Box>
+              </Collapse>
+            </CardContent>
+          </Card>
 
       {/* Export */}
       <Card sx={{ background: 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)', color: 'white' }}>
