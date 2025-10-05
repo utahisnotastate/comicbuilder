@@ -135,3 +135,29 @@ const layouts = {
 ## License
 
 MIT License - see LICENSE file for details.
+
+---
+
+# AI Studio Pro — Quick Start and Documentation
+
+This repository now includes a complete AI Studio Pro workflow for co‑creating stories, generating images, adding motion previews, and exporting clip rows for video pipelines — all without requiring backend setup.
+
+Quick Start (AI Studio)
+- Run the app: npm install && npm run dev
+- Open the app and click “AI Studio Pro” in the Panel Manager.
+- Image tab: Enter a prompt, choose style/quality, and generate. Use the plus icon to apply to your panel.
+- Story tab: Brainstorm a logline, beats, and characters, then Apply Beats to create panels. Generate Dialogue for All Panels when ready.
+- Video tab: Paste/choose a source image, pick aspect/motion, and Generate Preview to get a short webm.
+
+Advanced Docs
+- User Guide (end‑to‑end tutorial): docs/USER_GUIDE.md
+- AI Studio Pro (in‑depth): docs/AI_STUDIO.md
+- Advanced Topics (consistency, control, LoRA, layouts, security): docs/ADVANCED_TOPICS.md
+- Video Pipeline (CSV/webhooks): docs/VIDEO_PIPELINE.md
+- Providers & Integrations (plug real AI): docs/PROVIDERS_AND_INTEGRATIONS.md
+- Troubleshooting: docs/TROUBLESHOOTING.md
+- FAQ: docs/FAQ.md
+
+Notes
+- The default image provider returns styled placeholders so the app runs without keys. You can register real providers later; see Providers & Integrations.
+- MediaRecorder support varies by browser; use Chrome/Edge on desktop for best results.

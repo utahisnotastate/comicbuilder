@@ -2,6 +2,8 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { panelToClipRows, panelsToClipRows } from './utils/aiUtils';
+import { generateDialogue } from './utils/llmUtils';
+import { captionImage } from './utils/visionUtils';
 
 // Helper function for creating a new, blank panel
 const createNewPanel = () => ({
@@ -66,6 +68,9 @@ export const usePanelStore = create((set, get) => ({
   activePanel: createNewPanel(),
   pipelineSettings: { webhookUrl: '', autoSendOnSave: false, target: 'veo' },
   voiceMap: {},
+  story: { theme: '', logline: '', beats: [], characters: [] },
+  characterRegistry: [],
+  feedback: { images: {}, texts: {} },
 
   // ACTIONS
   setActivePanel: (panel) => {
@@ -307,5 +312,72 @@ export const usePanelStore = create((set, get) => ({
         const state = get();
         if (!state.activePanel) return;
         set({ activePanel: { ...state.activePanel, image: imageUrl } });
+      },
+
+      // --- Storytelling state & actions ---
+      setStory: (updates) => {
+        const state = get();
+        const next = { ...(state.story || {}), ...(updates || {}) };
+        set({ story: next });
+      },
+
+      upsertCharacter: (character) => {
+        const state = get();
+        const arr = Array.isArray(state.characterRegistry) ? [...state.characterRegistry] : [];
+        const idx = arr.findIndex(c => c.id === character.id || c.name?.toLowerCase() === character.name?.toLowerCase());
+        if (idx >= 0) {
+          arr[idx] = { ...arr[idx], ...character };
+        } else {
+          arr.push({ id: character.id || uuidv4(), ...character });
+        }
+        set({ characterRegistry: arr });
+      },
+
+      rateGeneratedAsset: ({ type, id, like, notes }) => {
+        const state = get();
+        const fb = state.feedback || { images: {}, texts: {} };
+        if (type === 'image') fb.images[id] = { like: !!like, notes: notes || '' };
+        if (type === 'text') fb.texts[id] = { like: !!like, notes: notes || '' };
+        set({ feedback: fb });
+      },
+
+      generatePanelsFromBeats: (beats = []) => {
+        const state = get();
+        const panels = (beats || []).map((b, i) => ({
+          id: uuidv4(),
+          image: '',
+          paperTexture: 'url("https://www.transparenttextures.com/patterns/paper.png")',
+          font: '"Special Elite", monospace',
+          elements: [],
+          styles: [],
+          metadata: {
+            sceneTitle: b.title || `Beat ${i + 1}`,
+            panelNumber: i + 1,
+            imagePrompt: b.imagePrompt || b.summary || 'comic panel'
+          },
+        }));
+        set({ savedPanels: [...state.savedPanels, ...panels], activePanel: panels[0] || state.activePanel });
+      },
+
+      generateDialogueForPanel: async (panelId) => {
+        const state = get();
+        const panel = state.savedPanels.find(p => p.id === panelId) || state.activePanel;
+        if (!panel) return;
+        let cap = '';
+        try {
+          if (panel.image) cap = await captionImage(panel.image);
+        } catch (_) {}
+        const lines = await generateDialogue({ panel, caption: cap });
+        const withIds = lines.map(l => ({ id: uuidv4(), type: 'dialogue', character: l.character || 'CHARACTER', dialogue: l.dialogue || '' }));
+        const nextPanel = { ...panel, elements: [...(panel.elements || []), ...withIds] };
+        const panels = state.savedPanels.map(p => (p.id === nextPanel.id ? nextPanel : p));
+        set({ savedPanels: panels, activePanel: state.activePanel?.id === nextPanel.id ? nextPanel : state.activePanel });
+      },
+
+      generateDialogueForAllPanels: async () => {
+        const state = get();
+        for (const p of state.savedPanels) {
+          await get().generateDialogueForPanel(p.id);
+        }
       },
 }));

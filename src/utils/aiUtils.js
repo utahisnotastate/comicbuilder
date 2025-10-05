@@ -28,11 +28,14 @@ registerImageProvider('placeholder', async (prompt, options = {}) => {
     fg = 'FFFFFF',
     style = 'Generic',
     quality = 75,
-    seed = Math.floor(Math.random() * 1e9)
+    seed = Math.floor(Math.random() * 1e9),
+    controlImageUrl = '',
+    controlType = ''
   } = options || {};
   console.log('Generating (placeholder) image with prompt:', prompt, options);
   await new Promise(resolve => setTimeout(resolve, 800));
-  const text = `AI+${encodeURIComponent(style)}+${quality}%25`;
+  const ctl = controlType ? `+CTL:${encodeURIComponent(controlType)}` : '';
+  const text = `AI+${encodeURIComponent(style)}+${quality}%25${ctl}`;
   return `https://via.placeholder.com/${width}x${height}/${bg}/${fg}?text=${text}`;
 });
 

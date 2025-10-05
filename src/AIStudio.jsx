@@ -45,6 +45,7 @@ import {
   StarBorder as StarBorderIcon
 } from '@mui/icons-material';
 import { generateImage, trainStyleModel, generateVideoPreviewFromImage } from './utils/aiUtils';
+import { generateStoryArtifacts } from './utils/llmUtils';
 import { CircularProgress } from '@mui/material';
 import { usePanelStore } from './store';
 
@@ -70,9 +71,28 @@ const AIStudio = ({ selectedPanelId = null, onApplyImage = null } = {}) => {
   const [videoGenerating, setVideoGenerating] = useState(false);
   const [videoResult, setVideoResult] = useState(null);
 
+  // Story/LLM UI state
+  const [storyTheme, setStoryTheme] = useState('sci-fi thriller about truth and corruption');
+  const [storyLoading, setStoryLoading] = useState(false);
+
+  // Consistency & conditional controls
+  const [selectedCharacterId, setSelectedCharacterId] = useState('');
+  const [controlType, setControlType] = useState('');
+  const [controlImageUrl, setControlImageUrl] = useState('');
+
   // Store hooks for applying to panel
   const updateSavedPanelImage = usePanelStore((s) => s.updateSavedPanelImage);
   const setActivePanelImage = usePanelStore((s) => s.setActivePanelImage);
+  // Story and layout store hooks
+  const story = usePanelStore((s) => s.story);
+  const setStory = usePanelStore((s) => s.setStory);
+  const generatePanelsFromBeats = usePanelStore((s) => s.generatePanelsFromBeats);
+  const generateDialogueForAllPanels = usePanelStore((s) => s.generateDialogueForAllPanels);
+  const rateGeneratedAsset = usePanelStore((s) => s.rateGeneratedAsset);
+  const characterRegistry = usePanelStore((s) => s.characterRegistry);
+  const upsertCharacter = usePanelStore((s) => s.upsertCharacter);
+  const savedPanels = usePanelStore((s) => s.savedPanels);
+  const reorderSavedPanels = usePanelStore((s) => s.reorderSavedPanels);
 
   const applyImageToPanel = (url) => {
     if (!url) return;
@@ -124,16 +144,30 @@ const AIStudio = ({ selectedPanelId = null, onApplyImage = null } = {}) => {
   const handleGenerateImage = async () => {
     if (!imagePrompt.trim()) return;
     setLoading(true);
-    const imageUrl = await generateImage(imagePrompt, {
+
+    // Inject character consistency snippet if selected
+    let prompt = imagePrompt;
+    if (selectedCharacterId) {
+      const c = (characterRegistry || []).find(ch => ch.id === selectedCharacterId);
+      if (c) {
+        const desc = Array.isArray(c.descriptors) ? c.descriptors.join(', ') : (c.descriptors || '');
+        const token = c.token ? `${c.token}` : '';
+        prompt = `${prompt}\nCharacter: ${c.name} ${token} (${desc})`;
+      }
+    }
+
+    const imageUrl = await generateImage(prompt, {
       style: selectedStyle,
       quality: imageQuality,
       width: 1024,
       height: 1024,
+      controlType: controlType || undefined,
+      controlImageUrl: controlImageUrl || undefined,
     });
 
     const newImage = {
       id: Date.now(),
-      prompt: imagePrompt,
+      prompt,
       style: selectedStyle,
       quality: imageQuality,
       timestamp: new Date().toLocaleString(),
@@ -230,6 +264,40 @@ const AIStudio = ({ selectedPanelId = null, onApplyImage = null } = {}) => {
                       { value: 75, label: 'High' },
                       { value: 100, label: 'Ultra' }
                     ]}
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Character Consistency</InputLabel>
+                    <Select
+                      value={selectedCharacterId}
+                      label="Character Consistency"
+                      onChange={(e) => setSelectedCharacterId(e.target.value)}
+                    >
+                      <MenuItem value="">None</MenuItem>
+                      {(characterRegistry || []).map((c) => (
+                        <MenuItem key={c.id} value={c.id}>
+                          {c.name} {c.token ? `(${c.token})` : ''}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth sx={{ mb: 1 }}>
+                    <InputLabel>Control Type</InputLabel>
+                    <Select value={controlType} label="Control Type" onChange={(e) => setControlType(e.target.value)}>
+                      <MenuItem value="">None</MenuItem>
+                      <MenuItem value="pose">Pose</MenuItem>
+                      <MenuItem value="edges">Edges</MenuItem>
+                      <MenuItem value="depth">Depth</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <TextField
+                    fullWidth
+                    placeholder="Control Image URL (optional)"
+                    value={controlImageUrl}
+                    onChange={(e) => setControlImageUrl(e.target.value)}
                   />
                 </Grid>
               </Grid>
@@ -332,6 +400,16 @@ const AIStudio = ({ selectedPanelId = null, onApplyImage = null } = {}) => {
                     <Chip label={`${image.quality}%`} size="small" />
                   </Box>
                   <Box sx={{ display: 'flex', gap: '5px', marginTop: '10px' }}>
+                    <Tooltip title="Like">
+                      <IconButton size="small" onClick={() => rateGeneratedAsset({ type: 'image', id: image.id, like: true })}>
+                        <StarIcon />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Dislike">
+                      <IconButton size="small" onClick={() => rateGeneratedAsset({ type: 'image', id: image.id, like: false })}>
+                        <StarBorderIcon />
+                      </IconButton>
+                    </Tooltip>
                     <Tooltip title="Save to Assets">
                       <IconButton size="small" onClick={() => console.log('Save to assets not implemented yet')}>
                         <SaveIcon />
@@ -443,6 +521,16 @@ const AIStudio = ({ selectedPanelId = null, onApplyImage = null } = {}) => {
                     {text.content}
                   </Typography>
                   <Box sx={{ display: 'flex', gap: '5px' }}>
+                    <Tooltip title="Like">
+                      <IconButton size="small" onClick={() => rateGeneratedAsset({ type: 'text', id: text.id, like: true })}>
+                        <StarIcon />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Dislike">
+                      <IconButton size="small" onClick={() => rateGeneratedAsset({ type: 'text', id: text.id, like: false })}>
+                        <StarBorderIcon />
+                      </IconButton>
+                    </Tooltip>
                     <Tooltip title="Save to Dialogue Library">
                       <IconButton size="small">
                         <SaveIcon />
@@ -659,6 +747,149 @@ const AIStudio = ({ selectedPanelId = null, onApplyImage = null } = {}) => {
     </Box>
   );
 
+  // --- Story tab ---
+  const handleBrainstorm = async () => {
+    setStoryLoading(true);
+    try {
+      const res = await generateStoryArtifacts(storyTheme, {});
+      setStory({ theme: storyTheme, ...(res || {}) });
+      if (res?.characters && Array.isArray(res.characters)) {
+        res.characters.forEach((c) => upsertCharacter(c));
+      }
+    } catch (e) {
+      console.error('Brainstorm failed', e);
+    } finally {
+      setStoryLoading(false);
+    }
+  };
+
+  const handleApplyBeats = () => {
+    if (story?.beats?.length) generatePanelsFromBeats(story.beats);
+  };
+
+  const handleGenerateDialoguesAll = async () => {
+    try {
+      await generateDialogueForAllPanels();
+    } catch (e) {
+      console.error('Dialogue generation failed', e);
+    }
+  };
+
+  const renderStory = () => (
+    <Box>
+      <Typography variant="h5" sx={{ color: 'white', fontWeight: 'bold', marginBottom: '20px' }}>
+        AI-Powered Storytelling
+      </Typography>
+
+      <Card sx={{ mb: 2 }}>
+        <CardContent>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={8}>
+              <TextField
+                fullWidth
+                label="Theme or premise"
+                value={storyTheme}
+                onChange={(e) => setStoryTheme(e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12} md={4} sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <Button variant="contained" startIcon={<AutoAwesomeIcon />} onClick={handleBrainstorm} disabled={storyLoading}>
+                {storyLoading ? <CircularProgress size={20} /> : 'Brainstorm'}
+              </Button>
+              <Button variant="outlined" onClick={handleApplyBeats} disabled={!story?.beats?.length}>Apply Beats</Button>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
+
+      {!!story?.logline && (
+        <Card sx={{ mb: 2 }}>
+          <CardContent>
+            <Typography variant="subtitle1" gutterBottom>Logline</Typography>
+            <TextField fullWidth multiline minRows={2} value={story.logline} onChange={(e) => setStory({ logline: e.target.value })} />
+          </CardContent>
+        </Card>
+      )}
+
+      <Grid container spacing={2}>
+        <Grid item xs={12} md={6}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant="subtitle1" gutterBottom>Beats</Typography>
+              <List dense>
+                {(story?.beats || []).map((b, idx) => (
+                  <ListItem key={b.id || idx} alignItems="flex-start">
+                    <ListItemText primary={`${idx + 1}. ${b.title}`} secondary={`${b.summary || ''}\nPrompt: ${b.imagePrompt || ''}`} />
+                  </ListItem>
+                ))}
+                {(!story?.beats || story.beats.length === 0) && (
+                  <ListItem><ListItemText primary="No beats yet. Click Brainstorm to generate." /></ListItem>
+                )}
+              </List>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant="subtitle1" gutterBottom>Characters</Typography>
+              <List dense>
+                {(story?.characters || []).map((c, idx) => (
+                  <ListItem key={c.id || idx}>
+                    <ListItemText primary={`${c.name} ${c.token ? '(' + c.token + ')' : ''}`} secondary={(c.descriptors || []).join(', ') || c.bio || ''} />
+                  </ListItem>
+                ))}
+                {(!story?.characters || story.characters.length === 0) && (
+                  <ListItem><ListItemText primary="No characters yet." /></ListItem>
+                )}
+              </List>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+        <Button variant="outlined" startIcon={<TextIcon />} onClick={handleGenerateDialoguesAll} disabled={!savedPanels.length}>Generate Dialogue For All Panels</Button>
+      </Box>
+    </Box>
+  );
+
+  // --- Layout tab ---
+  const applyReverseLayout = () => {
+    const n = savedPanels.length;
+    if (n < 2) return;
+    // Move last to front repeatedly to reverse order
+    for (let i = 0; i < n - 1; i++) {
+      reorderSavedPanels(n - 1, 0);
+    }
+  };
+
+  const applyShuffleLayout = () => {
+    const n = savedPanels.length;
+    if (n < 2) return;
+    for (let i = 0; i < n; i++) {
+      const from = Math.floor(Math.random() * n);
+      reorderSavedPanels(from, 0);
+    }
+  };
+
+  const renderLayout = () => (
+    <Box>
+      <Typography variant="h5" sx={{ color: 'white', fontWeight: 'bold', mb: 2 }}>Dynamic Layouts</Typography>
+      <Card>
+        <CardContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Suggest and apply alternate panel orders to explore story flow. More advanced composition-aware layouts can be added later.
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Button variant="contained" onClick={applyReverseLayout}>Reverse Order</Button>
+            <Button variant="outlined" onClick={applyShuffleLayout}>Shuffle</Button>
+          </Box>
+        </CardContent>
+      </Card>
+    </Box>
+  );
+
   return (
     <Box sx={{ padding: '20px', maxWidth: '1400px', margin: '0 auto' }}>
       <Typography variant="h4" sx={{ color: 'white', fontWeight: 'bold', marginBottom: '20px' }}>
@@ -670,12 +901,16 @@ const AIStudio = ({ selectedPanelId = null, onApplyImage = null } = {}) => {
         <Tab label="Text" />
         <Tab label="Style" />
         <Tab label="Video" />
+        <Tab label="Story" />
+        <Tab label="Layout" />
       </Tabs>
 
       {activeTab === 0 && renderImageGeneration()}
       {activeTab === 1 && renderTextGeneration()}
       {activeTab === 2 && renderStyleTransfer()}
       {activeTab === 3 && renderVideo()}
+      {activeTab === 4 && renderStory()}
+      {activeTab === 5 && renderLayout()}
     </Box>
   );
 };
