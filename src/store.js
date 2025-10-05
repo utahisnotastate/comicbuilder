@@ -52,11 +52,11 @@ export const usePanelStore = create((set, get) => ({
   setActivePanel: (panel) => {
     set({ activePanel: panel });
   },
-  
+
   saveActivePanel: () => {
     const state = get();
     const existingIndex = state.savedPanels.findIndex(p => p.id === state.activePanel.id);
-    
+
     let updatedPanels;
     if (existingIndex !== -1) {
       // If panel already exists, update it
@@ -66,7 +66,7 @@ export const usePanelStore = create((set, get) => ({
       // Otherwise, add it as a new saved panel
       updatedPanels = [...state.savedPanels, state.activePanel];
     }
-    
+
     set({ savedPanels: updatedPanels });
   },
 
@@ -100,9 +100,11 @@ export const usePanelStore = create((set, get) => ({
       position: { x: 50, y: 50 },
       size: type === 'dialogue' ? { width: 250, height: 'auto' } : { width: 150, height: 30 },
       rotation: type === 'dialogue' ? -1 : -10,
+      zIndex: type === 'tape' ? 200 : 100,
+      ...(type === 'tape' && { color: 'rgba(0, 0, 0, 0.6)' }),
       ...(type === 'dialogue' && { character: 'CHARACTER', dialogue: 'Your text here...' }),
     };
-    
+
     set({
       activePanel: {
         ...state.activePanel,
@@ -153,8 +155,8 @@ export const usePanelStore = create((set, get) => ({
           ...panel,
           id: panel.id || uuidv4(),
         }));
-        
-        set({ 
+
+        set({
           savedPanels: [...state.savedPanels, ...newPanels],
           activePanel: newPanels[0] || state.activePanel // Set first panel as active
         });

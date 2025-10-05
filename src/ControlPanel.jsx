@@ -67,6 +67,7 @@ const ControlPanel = ({ onExport }) => {
   const redo = usePanelStore((state) => state.redo);
   const activePanel = usePanelStore((state) => state.activePanel);
   const updateElement = usePanelStore((state) => state.updateElement);
+  const removeElement = usePanelStore((state) => state.removeElement);
   const generatePanelsFromDocument = usePanelStore((state) => state.generatePanelsFromDocument);
   const generatePreview = usePanelStore((state) => state.generatePreview);
 
@@ -93,24 +94,24 @@ const ControlPanel = ({ onExport }) => {
 
   const handleGenerateFromText = () => {
     if (!dialogueText.trim()) return;
-    
+
     const parsedDialogue = parseDialogueText(dialogueText);
     if (parsedDialogue.length === 0) return;
 
     // Clear existing elements
     const newElements = [];
-    
+
     // Generate tape elements (for the image)
     const tapeElements = generateTapePositions(parsedDialogue.length, 660, 400);
     newElements.push(...tapeElements);
-    
+
     // Generate dialogue elements (below the image)
     const dialogueElements = generateDialoguePositions(parsedDialogue, 700, 400);
     newElements.push(...dialogueElements);
-    
+
     // Update the panel with new elements
     updatePanelStyle({ elements: newElements });
-    
+
     // Clear the input
     setDialogueText('');
     setShowDialogueInput(false);
@@ -139,12 +140,12 @@ const ControlPanel = ({ onExport }) => {
     const scenes = [];
     const sceneRegex = /Scene\s*(\d+)?:\s*(.+?)(?=Scene\s*\d+:|$)/gs;
     const panelRegex = /Panel\s*(\d+)\s*\nImage Prompt:\s*(.+?)\nImage:\s*(.+?)\nDialogue:\s*(.+?)(?=Panel\s*\d+:|$)/gs;
-    
+
     let sceneMatch;
     while ((sceneMatch = sceneRegex.exec(text)) !== null) {
       const sceneTitle = sceneMatch[2].trim();
       const sceneContent = sceneMatch[0];
-      
+
       const panels = [];
       let panelMatch;
       while ((panelMatch = panelRegex.exec(sceneContent)) !== null) {
@@ -152,7 +153,7 @@ const ControlPanel = ({ onExport }) => {
         const imagePrompt = panelMatch[2].trim();
         const imageDescription = panelMatch[3].trim();
         const dialogueText = panelMatch[4].trim();
-        
+
         panels.push({
           panelNumber: parseInt(panelNumber),
           imagePrompt,
@@ -161,7 +162,7 @@ const ControlPanel = ({ onExport }) => {
           parsedDialogue: parseDialogueText(dialogueText)
         });
       }
-      
+
       if (panels.length > 0) {
         scenes.push({
           title: sceneTitle,
@@ -169,7 +170,7 @@ const ControlPanel = ({ onExport }) => {
         });
       }
     }
-    
+
     console.log('Parsed scenes:', scenes);
     // Generate panels from parsed data
     generatePanelsFromDocumentData(scenes);
@@ -178,7 +179,7 @@ const ControlPanel = ({ onExport }) => {
   const generatePanelsFromDocumentData = (scenes) => {
     // Generate panels for each scene/panel combination
     const generatedPanels = [];
-    
+
     scenes.forEach(scene => {
       scene.panels.forEach(panel => {
         const newPanel = {
@@ -194,19 +195,19 @@ const ControlPanel = ({ onExport }) => {
             imageDescription: panel.imageDescription
           }
         };
-        
+
         // Generate tape elements
         const tapeElements = generateTapePositions(panel.parsedDialogue.length, 660, 400);
         newPanel.elements.push(...tapeElements);
-        
+
         // Generate dialogue elements
         const dialogueElements = generateDialoguePositions(panel.parsedDialogue, 700, 400);
         newPanel.elements.push(...dialogueElements);
-        
+
         generatedPanels.push(newPanel);
       });
     });
-    
+
     console.log('Generated panels:', generatedPanels);
     // Add to saved panels using the store
     generatePanelsFromDocument(generatedPanels);
@@ -233,7 +234,7 @@ const ControlPanel = ({ onExport }) => {
             <AutoAwesomeIcon color="primary" />
             Quick Actions
           </Typography>
-          
+
           <Box sx={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
             <Tooltip title="Undo">
               <IconButton onClick={undo} color="primary" variant="outlined">
@@ -252,8 +253,8 @@ const ControlPanel = ({ onExport }) => {
             </Tooltip>
           </Box>
 
-          <Button 
-            variant="contained" 
+          <Button
+            variant="contained"
             startIcon={<TextSnippetIcon />}
             onClick={() => setShowDialogueInput(!showDialogueInput)}
             fullWidth
@@ -283,7 +284,7 @@ const ControlPanel = ({ onExport }) => {
               >
                 Generate Transcript
               </Button>
-              
+
               <Button
                 variant="outlined"
                 onClick={handleGeneratePreview}
@@ -300,17 +301,17 @@ const ControlPanel = ({ onExport }) => {
           <Divider sx={{ margin: '15px 0' }} />
 
           <Box sx={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <Button 
-              variant="outlined" 
-              startIcon={<AddCommentIcon />} 
+            <Button
+              variant="outlined"
+              startIcon={<AddCommentIcon />}
               onClick={() => addElement('dialogue')}
               size="small"
             >
               Dialogue
             </Button>
-            <Button 
-              variant="outlined" 
-              startIcon={<NoteAddIcon />} 
+            <Button
+              variant="outlined"
+              startIcon={<NoteAddIcon />}
               onClick={() => addElement('tape')}
               size="small"
             >
@@ -449,7 +450,7 @@ const ControlPanel = ({ onExport }) => {
                       />
                     </Grid>
                   </Grid>
-                  
+
                   <FormControl fullWidth>
                     <InputLabel>Speech Bubble Style</InputLabel>
                     <Select label="Speech Bubble Style" defaultValue="rounded">
@@ -493,9 +494,9 @@ const ControlPanel = ({ onExport }) => {
                   <Typography variant="subtitle2">Panel Elements</Typography>
                   <Stack spacing={1}>
                     {activePanel.elements.map((element, index) => (
-                      <Box key={element.id} sx={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
+                      <Box key={element.id} sx={{
+                        display: 'flex',
+                        alignItems: 'center',
                         justifyContent: 'space-between',
                         padding: '8px',
                         backgroundColor: '#f5f5f5',
@@ -509,17 +510,17 @@ const ControlPanel = ({ onExport }) => {
                         </Box>
                         <Box sx={{ display: 'flex', gap: '5px' }}>
                           <Tooltip title="Move Up">
-                            <IconButton size="small">
+                            <IconButton size="small" onClick={() => updateElement(element.id, { zIndex: (typeof element.zIndex === 'number' ? element.zIndex : 1) + 1 })}>
                               <ExpandLessIcon />
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="Move Down">
-                            <IconButton size="small">
+                            <IconButton size="small" onClick={() => updateElement(element.id, { zIndex: Math.max(0, (typeof element.zIndex === 'number' ? element.zIndex : 1) - 1) })}>
                               <ExpandMoreIcon />
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="Delete">
-                            <IconButton size="small" color="error">
+                            <IconButton size="small" color="error" onClick={() => removeElement(element.id)}>
                               <DeleteIcon />
                             </IconButton>
                           </Tooltip>
@@ -597,12 +598,12 @@ const ControlPanel = ({ onExport }) => {
           <Typography variant="body2" sx={{ opacity: 0.9, marginBottom: '15px' }}>
             Generate high-resolution image for InDesign
           </Typography>
-          <Button 
-            variant="contained" 
+          <Button
+            variant="contained"
             color="inherit"
-            fullWidth 
+            fullWidth
             onClick={onExport}
-            sx={{ 
+            sx={{
               backgroundColor: 'rgba(255,255,255,0.2)',
               '&:hover': {
                 backgroundColor: 'rgba(255,255,255,0.3)',

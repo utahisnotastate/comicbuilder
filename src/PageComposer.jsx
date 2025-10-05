@@ -1,14 +1,14 @@
 // src/PageComposer.jsx
 import React, { useState, useRef, useCallback } from 'react';
 import { usePanelStore } from './store';
-import { 
-  Button, 
-  Paper, 
-  Typography, 
-  Box, 
-  Select, 
-  MenuItem, 
-  FormControl, 
+import {
+  Button,
+  Paper,
+  Typography,
+  Box,
+  Select,
+  MenuItem,
+  FormControl,
   InputLabel,
   Grid,
   Card,
@@ -29,15 +29,15 @@ const PanelRenderer = ({ panel, isPreview = false }) => (
     borderRadius: '4px',
     border: '1px solid #ddd',
   }}>
-    <img 
-      src={panel.image} 
-      alt="" 
-      style={{ 
-        width: '100%', 
+    <img
+      src={panel.image}
+      alt=""
+      style={{
+        width: '100%',
         height: isPreview ? '120px' : '100%',
         objectFit: 'cover',
-        display: 'block' 
-      }} 
+        display: 'block'
+      }}
     />
     {/* Render elements for full-size panels */}
     {!isPreview && panel.elements.map(element => {
@@ -52,12 +52,13 @@ const PanelRenderer = ({ panel, isPreview = false }) => (
             width: element.size.width,
             height: element.size.height,
             transform: `rotate(${element.rotation}deg)`,
-            backgroundColor: isTape ? 'rgba(255, 220, 150, 0.7)' : 'white',
+            backgroundColor: isTape ? (element.color || 'rgba(255, 255, 240, 0.35)') : 'white',
             padding: isTape ? '0' : '8px 12px',
             boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
             border: '1px solid rgba(0,0,0,0.1)',
             fontSize: '12px',
             fontFamily: panel.font,
+            zIndex: typeof element.zIndex === 'number' ? element.zIndex : 1,
           }}
         >
           {!isTape && (
@@ -107,6 +108,8 @@ const PageComposer = () => {
   const savedPanels = usePanelStore((state) => state.savedPanels);
   const [layoutKey, setLayoutKey] = useState('2x2 Grid');
   const [pageSlots, setPageSlots] = useState(Array(layouts['2x2 Grid'].slots).fill(null));
+  const [orientation, setOrientation] = useState('portrait'); // 'portrait' | 'landscape'
+  const [dragOverIndex, setDragOverIndex] = useState(null);
 
   const handleLayoutChange = (event) => {
     const newKey = event.target.value;
@@ -129,15 +132,16 @@ const PageComposer = () => {
   const onExportPage = useCallback(() => {
     if (pageRef.current === null) return;
 
-    // Standard Comic Page Trim: 6.625" x 10.25"
-    // At 300 DPI (dots per inch) for print:
-    // Width: 6.625 * 300 = 1987.5px -> 1988px
-    // Height: 10.25 * 300 = 3075px
+    // Standard Comic Page Trim: 6.625" x 10.25" @ 300 DPI
+    const portrait = { width: 1988, height: 3075 };
+    const landscape = { width: 3075, height: 1988 };
+    const dims = orientation === 'landscape' ? landscape : portrait;
+
     const options = {
-      width: 1988,
-      height: 3075,
+      width: dims.width,
+      height: dims.height,
       style: {
-        transform: `scale(${1988 / pageRef.current.offsetWidth})`,
+        transform: `scale(${dims.width / pageRef.current.offsetWidth})`,
         transformOrigin: 'top left',
         margin: 0,
       }
@@ -146,12 +150,12 @@ const PageComposer = () => {
     htmlToImage.toPng(pageRef.current, options)
       .then((dataUrl) => {
         const link = document.createElement('a');
-        link.download = 'comic-page.png';
+        link.download = `comic-page-${orientation}.png`;
         link.href = dataUrl;
         link.click();
       })
       .catch((err) => console.error('Export failed:', err));
-  }, [pageRef]);
+  }, [pageRef, orientation]);
 
   return (
     <Box sx={{ display: 'flex', gap: '30px', width: '100%', maxWidth: '1400px', margin: '0 auto' }}>
@@ -164,8 +168,19 @@ const PageComposer = () => {
           </Typography>
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
+              Tip: Drag a panel into a slot, or click a slot chip to assign.
+            </Typography>
             {savedPanels.map(panel => (
-              <Card key={panel.id} sx={{ marginBottom: '10px' }}>
+              <Card
+                key={panel.id}
+                sx={{ marginBottom: '10px' }}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('panelId', panel.id);
+                  e.dataTransfer.effectAllowed = 'copy';
+                }}
+              >
                 <CardContent sx={{ padding: '8px !important' }}>
                   <PanelRenderer panel={panel} isPreview />
                   <Typography variant="caption" display="block" sx={{ marginTop: '8px' }}>
@@ -191,37 +206,63 @@ const PageComposer = () => {
 
       {/* Page Workspace */}
       <Box sx={{ flex: 1 }}>
-        <FormControl sx={{ marginBottom: '20px', minWidth: '200px' }}>
-          <InputLabel>Layout</InputLabel>
-          <Select value={layoutKey} label="Layout" onChange={handleLayoutChange}>
-            {Object.keys(layouts).map(key => (
-              <MenuItem key={key} value={key}>{key}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', marginBottom: '20px' }}>
+          <FormControl sx={{ minWidth: '200px' }}>
+            <InputLabel>Layout</InputLabel>
+            <Select value={layoutKey} label="Layout" onChange={handleLayoutChange}>
+              {Object.keys(layouts).map(key => (
+                <MenuItem key={key} value={key}>{key}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
-        <Paper 
-          ref={pageRef} 
+          <FormControl sx={{ minWidth: '160px' }}>
+            <InputLabel>Orientation</InputLabel>
+            <Select value={orientation} label="Orientation" onChange={(e) => setOrientation(e.target.value)}>
+              <MenuItem value="portrait">Portrait</MenuItem>
+              <MenuItem value="landscape">Landscape</MenuItem>
+            </Select>
+          </FormControl>
+
+          <Button variant="outlined" color="warning" onClick={() => setPageSlots(Array(layouts[layoutKey].slots).fill(null))}>
+            Clear All Slots
+          </Button>
+        </Box>
+
+        <Paper
+          ref={pageRef}
           sx={{
             display: 'grid',
             padding: '15px',
             backgroundColor: 'white',
-            aspectRatio: '6.625 / 10.25',
+            aspectRatio: orientation === 'landscape' ? '10.25 / 6.625' : '6.625 / 10.25',
             width: '500px',
             margin: '0 auto',
             ...layouts[layoutKey]
           }}
         >
           {pageSlots.map((panel, index) => (
-            <Box 
-              key={index} 
-              sx={{ 
-                border: '2px dashed #ccc', 
-                display: 'flex', 
-                alignItems: 'center', 
+            <Box
+              key={index}
+              onDragOver={(e) => { e.preventDefault(); setDragOverIndex(index); }}
+              onDragLeave={() => setDragOverIndex((cur) => (cur === index ? null : cur))}
+              onDrop={(e) => {
+                e.preventDefault();
+                const panelId = e.dataTransfer.getData('panelId');
+                const dropped = savedPanels.find(p => p.id === panelId);
+                if (dropped) assignPanelToSlot(dropped, index);
+                setDragOverIndex(null);
+              }}
+              sx={{
+                border: '2px dashed',
+                borderColor: dragOverIndex === index ? 'primary.main' : '#ccc',
+                backgroundColor: dragOverIndex === index ? 'rgba(25,118,210,0.06)' : 'transparent',
+                display: 'flex',
+                alignItems: 'center',
                 justifyContent: 'center',
                 position: 'relative',
-                minHeight: '100px'
+                minHeight: '100px',
+                transition: 'background-color 120ms ease, border-color 120ms ease'
               }}
             >
               {panel ? (
@@ -242,10 +283,10 @@ const PageComposer = () => {
             </Box>
           ))}
         </Paper>
-        
+
         <Box sx={{ textAlign: 'center', marginTop: '20px' }}>
-          <Button 
-            variant="contained" 
+          <Button
+            variant="contained"
             size="large"
             onClick={onExportPage}
             disabled={pageSlots.every(slot => slot === null)}

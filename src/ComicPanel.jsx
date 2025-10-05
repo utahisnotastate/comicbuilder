@@ -40,13 +40,14 @@ const styles = {
     },
   },
   tape: {
-    backgroundColor: 'rgba(255, 220, 150, 0.85)',
-    boxShadow: '0 3px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.5)',
-    border: '1px solid rgba(200, 150, 100, 0.8)',
-    opacity: 0.9,
+    backgroundColor: 'rgba(255, 255, 240, 0.35)', // default; will be overridden by element.color if present
+    boxShadow: '0 2px 6px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.35)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    opacity: 0.95,
     cursor: 'grab',
     borderRadius: '2px',
     position: 'relative',
+    backdropFilter: 'blur(0.5px)',
     '&:active': {
       cursor: 'grabbing',
     },
@@ -57,7 +58,7 @@ const styles = {
       left: '0',
       right: '0',
       bottom: '0',
-      background: 'repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255,255,255,0.3) 2px, rgba(255,255,255,0.3) 4px)',
+      background: 'repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255,255,255,0.12) 2px, rgba(255,255,255,0.12) 4px)',
       borderRadius: '2px',
     },
   },
@@ -108,10 +109,12 @@ const Element = ({ element }) => {
       disableDragging={false}
       enableResizing={!isTape}
       onDoubleClick={handleDoubleClick}
-      bounds="parent"
+      bounds={isTape ? '.panel-wrapper' : 'parent'}
+      style={{ zIndex: typeof element.zIndex === 'number' ? element.zIndex : 1 }}
     >
       <div style={{
         ...(isTape ? styles.tape : styles.dialogueBox),
+        ...(isTape ? { backgroundColor: element.color || styles.tape.backgroundColor } : {}),
         transform: `rotate(${element.rotation}deg)`,
         fontFamily: usePanelStore.getState().activePanel.font,
         width: '100%',
@@ -142,6 +145,7 @@ const ComicPanel = React.forwardRef(({ panel: propPanel, ...props }, ref) => {
   return (
     <div
       ref={ref}
+      className="panel-wrapper"
       style={{
         ...styles.wrapper,
         backgroundImage: panel.paperTexture,
@@ -153,7 +157,7 @@ const ComicPanel = React.forwardRef(({ panel: propPanel, ...props }, ref) => {
         <img src={panel.image} alt="Comic panel background" style={styles.image} />
         {tapeElements.map(el => <Element key={el.id} element={el} />)}
       </div>
-      
+
       {/* Dialogue Below Image */}
       {dialogueElements.map(el => <Element key={el.id} element={el} />)}
     </div>

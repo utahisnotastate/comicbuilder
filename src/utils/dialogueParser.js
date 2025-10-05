@@ -2,17 +2,17 @@
 
 export const parseDialogueText = (text) => {
   if (!text || typeof text !== 'string') return [];
-  
+
   const lines = text.split('\n').filter(line => line.trim());
   const dialogue = [];
-  
+
   lines.forEach(line => {
     const trimmedLine = line.trim();
     if (!trimmedLine) return;
-    
+
     // Match pattern: "Character: Dialogue text"
     const match = trimmedLine.match(/^([^:]+):\s*(.+)$/);
-    
+
     if (match) {
       const [, character, dialogueText] = match;
       dialogue.push({
@@ -32,7 +32,7 @@ export const parseDialogueText = (text) => {
       }
     }
   });
-  
+
   return dialogue;
 };
 
@@ -40,7 +40,7 @@ export const generateTapePositions = (dialogueCount, imageWidth = 660, imageHeig
   const tapes = [];
   const tapeWidth = 120;
   const tapeHeight = 30;
-  
+
   // Generate tape positions only on the image area
   const positions = [
     { x: -15, y: -15, rotation: -8 },
@@ -53,10 +53,10 @@ export const generateTapePositions = (dialogueCount, imageWidth = 660, imageHeig
     { x: imageWidth / 4, y: imageHeight / 4, rotation: 12 },
     { x: imageWidth * 3/4 - tapeWidth, y: imageHeight * 3/4 - tapeHeight, rotation: -12 },
   ];
-  
+
   // Select random positions based on dialogue count (but limit to image area)
   const selectedPositions = positions.slice(0, Math.min(dialogueCount + 2, positions.length));
-  
+
   selectedPositions.forEach((pos, index) => {
     tapes.push({
       id: `tape-${index}`,
@@ -64,19 +64,20 @@ export const generateTapePositions = (dialogueCount, imageWidth = 660, imageHeig
       position: { x: pos.x, y: pos.y },
       size: { width: tapeWidth, height: tapeHeight },
       rotation: pos.rotation,
-      color: getRandomTapeColor()
+      color: getRandomTapeColor(),
+      zIndex: 200 // default above dialogues so tape can sit on top
     });
   });
-  
+
   return tapes;
 };
 
 const getRandomTapeColor = () => {
+  // Black tape (semi-transparent) for a realistic look
   const colors = [
-    'rgba(255, 220, 150, 0.7)', // Classic tape
-    'rgba(255, 200, 120, 0.7)', // Slightly darker
-    'rgba(255, 240, 180, 0.7)', // Lighter
-    'rgba(240, 200, 140, 0.7)', // More yellow
+    'rgba(0, 0, 0, 0.6)', // standard black tape
+    'rgba(0, 0, 0, 0.5)', // slightly lighter
+    'rgba(10, 10, 10, 0.55)', // near-black variant
   ];
   return colors[Math.floor(Math.random() * colors.length)];
 };
@@ -85,10 +86,10 @@ export const generateDialoguePositions = (dialogue, panelWidth = 700, imageHeigh
   return dialogue.map((item, index) => {
     const baseWidth = panelWidth - 40; // Full width minus padding
     const baseHeight = 'auto';
-    
+
     // Position dialogue below the image
     const yPosition = imageHeight + 20 + (index * 60); // Start below image, stack vertically
-    
+
     return {
       id: `dialogue-${index}`,
       type: 'dialogue',
@@ -97,6 +98,7 @@ export const generateDialoguePositions = (dialogue, panelWidth = 700, imageHeigh
       position: { x: 20, y: yPosition },
       size: { width: baseWidth, height: baseHeight },
       rotation: 0, // No rotation for clean transcript look
+      zIndex: 100,
     };
   });
 };
