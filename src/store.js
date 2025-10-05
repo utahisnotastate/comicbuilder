@@ -1,6 +1,7 @@
 // src/store.js
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
+import { panelToClipRows, panelsToClipRows } from './utils/aiUtils';
 
 // Helper function for creating a new, blank panel
 const createNewPanel = () => ({
@@ -11,6 +12,21 @@ const createNewPanel = () => ({
   elements: [], // Start with no elements for a cleaner UX
   styles: [], // Per-panel style variants
 });
+
+// Normalize any externally provided panel-like object to our schema
+const normalizeImportedPanel = (obj) => {
+  if (!obj) return null;
+  const normalized = {
+    id: obj.id || uuidv4(),
+    image: obj.image || obj.preview || obj.src || '',
+    paperTexture: obj.paperTexture || 'url("https://www.transparenttextures.com/patterns/paper.png")',
+    font: obj.font || '"Special Elite", monospace',
+    elements: Array.isArray(obj.elements) ? obj.elements : [],
+    styles: Array.isArray(obj.styles) ? obj.styles : [],
+    metadata: obj.metadata || {},
+  };
+  return normalized.image ? normalized : null;
+};
 
 // Simplified history implementation
 let history = [];
@@ -48,13 +64,15 @@ export const usePanelStore = create((set, get) => ({
   // STATE
   savedPanels: [],
   activePanel: createNewPanel(),
+  pipelineSettings: { webhookUrl: '', autoSendOnSave: false, target: 'veo' },
+  voiceMap: {},
 
   // ACTIONS
   setActivePanel: (panel) => {
     set({ activePanel: panel });
   },
 
-  saveActivePanel: () => {
+  saveActivePanel: async () => {
     const state = get();
     const existingIndex = state.savedPanels.findIndex(p => p.id === state.activePanel.id);
 
@@ -69,6 +87,16 @@ export const usePanelStore = create((set, get) => ({
     }
 
     set({ savedPanels: updatedPanels });
+
+    // Auto-send to pipeline if enabled
+    const { autoSendOnSave, webhookUrl } = get().pipelineSettings || {};
+    if (autoSendOnSave && webhookUrl) {
+      try {
+        await get().sendPanelToPipeline(state.activePanel);
+      } catch (e) {
+        console.warn('Auto-send failed:', e);
+      }
+    }
   },
 
   loadPanelForEditing: (panelId) => {
@@ -132,6 +160,57 @@ export const usePanelStore = create((set, get) => ({
         ...styleProps,
       },
     });
+  },
+
+  // --- Video Pipeline settings & helpers ---
+  setPipelineSettings: (settings) => {
+    const current = get().pipelineSettings || {};
+    set({ pipelineSettings: { ...current, ...settings } });
+  },
+
+  setVoiceMap: (map) => {
+    const current = get().voiceMap || {};
+    set({ voiceMap: { ...current, ...map } });
+  },
+
+  normalizePanelToClips: (panel) => {
+    const state = get();
+    return panelToClipRows(panel || state.activePanel, state.voiceMap);
+  },
+
+  normalizeAllToClips: () => {
+    const state = get();
+    return panelsToClipRows(state.savedPanels, state.voiceMap);
+  },
+
+  sendPanelToPipeline: async (panel) => {
+    const state = get();
+    const { webhookUrl, target } = state.pipelineSettings || {};
+    if (!webhookUrl) return { ok: false, reason: 'no_webhook' };
+    const rows = panelToClipRows(panel || state.activePanel, state.voiceMap);
+    if (!rows.length) return { ok: false, reason: 'no_rows' };
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: target || 'veo', rows })
+    });
+    let data = null; try { data = await res.json(); } catch (_) {}
+    return { ok: res.ok, status: res.status, data };
+  },
+
+  sendAllToPipeline: async () => {
+    const state = get();
+    const { webhookUrl, target } = state.pipelineSettings || {};
+    if (!webhookUrl) return { ok: false, reason: 'no_webhook' };
+    const rows = panelsToClipRows(state.savedPanels, state.voiceMap);
+    if (!rows.length) return { ok: false, reason: 'no_rows' };
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: target || 'veo', rows })
+    });
+    let data = null; try { data = await res.json(); } catch (_) {}
+    return { ok: res.ok, status: res.status, data };
   },
 
       // Simplified history actions
@@ -201,5 +280,32 @@ export const usePanelStore = create((set, get) => ({
           return { ...p, styles: nextStyles };
         });
         set({ savedPanels: panels });
+      },
+
+      // Append externally imported panels
+      addSavedPanels: (panels) => {
+        const state = get();
+        const arr = Array.isArray(panels) ? panels : [panels];
+        const normalized = arr.map(normalizeImportedPanel).filter(Boolean);
+        if (!normalized.length) return;
+        set({ savedPanels: [...state.savedPanels, ...normalized] });
+      },
+
+      // Update an image on a saved panel by id
+      updateSavedPanelImage: (panelId, imageUrl) => {
+        const state = get();
+        const panels = state.savedPanels.map(p => (p.id === panelId ? { ...p, image: imageUrl } : p));
+        set({ savedPanels: panels });
+        // If active panel matches, mirror the change
+        if (state.activePanel && state.activePanel.id === panelId) {
+          set({ activePanel: { ...state.activePanel, image: imageUrl } });
+        }
+      },
+
+      // Update active panel image
+      setActivePanelImage: (imageUrl) => {
+        const state = get();
+        if (!state.activePanel) return;
+        set({ activePanel: { ...state.activePanel, image: imageUrl } });
       },
 }));

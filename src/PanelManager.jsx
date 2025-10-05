@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   Box,
   Card,
@@ -14,6 +14,8 @@ import {
   DialogContent,
   DialogActions,
   TextField,
+  Switch,
+  FormControlLabel,
   FormControl,
   InputLabel,
   Select,
@@ -24,13 +26,16 @@ import {
   Delete as DeleteIcon,
   Visibility as VisibilityIcon,
   Download as DownloadIcon,
-  Add as AddIcon
+  Add as AddIcon,
+  CloudUpload as CloudUploadIcon,
+  AutoAwesome as AutoAwesomeIcon
 } from '@mui/icons-material';
 import { usePanelStore } from './store';
 import ComicPanel from './ComicPanel';
 import * as htmlToImage from 'html-to-image';
-import { generateImage } from './utils/aiUtils';
+import { generateImage, downloadCsv } from './utils/aiUtils';
 import { createRoot } from 'react-dom/client';
+import AIStudio from './AIStudio';
 
 const PanelManager = () => {
   const savedPanels = usePanelStore((state) => state.savedPanels);
@@ -39,6 +44,22 @@ const PanelManager = () => {
   const reorderSavedPanels = usePanelStore((state) => state.reorderSavedPanels);
   const addPanelStyle = usePanelStore((state) => state.addPanelStyle);
   const removePanelStyle = usePanelStore((state) => state.removePanelStyle);
+
+  // Pipeline store hooks
+  const pipelineSettings = usePanelStore((state) => state.pipelineSettings);
+  const setPipelineSettings = usePanelStore((state) => state.setPipelineSettings);
+  const voiceMap = usePanelStore((state) => state.voiceMap);
+  const setVoiceMap = usePanelStore((state) => state.setVoiceMap);
+  const normalizeAllToClips = usePanelStore((state) => state.normalizeAllToClips);
+  const sendPanelToPipeline = usePanelStore((state) => state.sendPanelToPipeline);
+  const sendAllToPipeline = usePanelStore((state) => state.sendAllToPipeline);
+  const addSavedPanels = usePanelStore((state) => state.addSavedPanels);
+
+  const fileInputRef = useRef(null);
+  const [importing, setImporting] = useState(false);
+  const [livePreset, setLivePreset] = useState('Original');
+  const [kenBurns, setKenBurns] = useState(true);
+  const [aiOpen, setAiOpen] = useState(false);
 
   const [selectedPanelId, setSelectedPanelId] = useState(savedPanels[0]?.id || null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -53,8 +74,26 @@ const PanelManager = () => {
 
   const selectedPanel = savedPanels.find(p => p.id === selectedPanelId) || savedPanels[0] || null;
 
+  const uniqueCharacters = useMemo(() => {
+    const setChars = new Set();
+    savedPanels.forEach(p => (p.elements || []).forEach(el => {
+      if (el.type === 'dialogue' && el.character) setChars.add(el.character);
+    }));
+    return Array.from(setChars);
+  }, [savedPanels]);
+
+  // Live style presets for realtime preview
+  const presets = useMemo(() => ({
+    Original: 'none',
+    Noir: 'grayscale(1) contrast(1.2)',
+    Neon: 'saturate(1.6) hue-rotate(20deg) contrast(1.05)',
+    Vintage: 'sepia(0.6) contrast(1.1) saturate(0.9)',
+    Duotone: 'grayscale(1) contrast(1.2) brightness(0.9) hue-rotate(200deg)'
+  }), []);
+  const liveFilterCss = presets[livePreset] || 'none';
+
   const handlePreview = (panel) => {
-    setSelectedPanel(panel);
+    if (panel && panel.id) setSelectedPanelId(panel.id);
     setPreviewOpen(true);
   };
 
@@ -131,21 +170,200 @@ const PanelManager = () => {
     }
   };
 
+  // --- Import panels from local files ---
+  const handleImportClick = () => {
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    fileInputRef.current?.click();
+  };
+
+  const handleFilesSelected = async (e) => {
+    setImporting(true);
+    try {
+      const files = Array.from(e.target.files || []);
+      const toAdd = [];
+      let failed = 0;
+
+      const readAsDataURL = (file) => new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+      });
+      const readAsText = (file) => new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => resolve(null);
+        reader.readAsText(file);
+      });
+
+      for (const file of files) {
+        if (file.type && file.type.startsWith('image/')) {
+          const dataUrl = await readAsDataURL(file);
+          if (dataUrl) {
+            toAdd.push({ image: dataUrl, metadata: { sceneTitle: file.name.replace(/\.[^.]+$/, '') } });
+          } else {
+            failed++;
+          }
+        } else if (file.name.toLowerCase().endsWith('.json') || (file.type && file.type.includes('json'))) {
+          const text = await readAsText(file);
+          if (!text) { failed++; continue; }
+          try {
+            const json = JSON.parse(text);
+            const arr = Array.isArray(json) ? json : (json.savedPanels || json.panels || (json.image ? [json] : []));
+            if (Array.isArray(arr)) {
+              toAdd.push(...arr);
+            } else {
+              failed++;
+            }
+          } catch (_) {
+            failed++;
+          }
+        } else {
+          failed++;
+        }
+      }
+
+      if (toAdd.length) addSavedPanels(toAdd);
+      if (e?.target) e.target.value = '';
+      const note = `Imported ${toAdd.length} panel(s)` + (failed ? `, ${failed} failed` : '');
+      try { window.alert(note); } catch (_) { console.log(note); }
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <Box sx={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'white' }}>
           Panel Manager
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={handleCreateNew}
-          sx={{ background: 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)' }}
-        >
-          New Panel
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <input
+            type="file"
+            ref={fileInputRef}
+            multiple
+            accept=".json,image/*"
+            onChange={handleFilesSelected}
+            style={{ display: 'none' }}
+          />
+          <Button
+            variant="outlined"
+            startIcon={<CloudUploadIcon />}
+            onClick={handleImportClick}
+            disabled={importing}
+          >
+            {importing ? 'Importing…' : 'Import Panels'}
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleCreateNew}
+            sx={{ background: 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)' }}
+          >
+            New Panel
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AutoAwesomeIcon />}
+            onClick={() => setAiOpen(true)}
+            sx={{ background: 'linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%)' }}
+          >
+            AI Studio Pro
+          </Button>
+        </Box>
       </Box>
+
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>Video Pipeline</Typography>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={6}>
+              <TextField
+                size="small"
+                fullWidth
+                label="Webhook URL (Zapier/Make)"
+                placeholder="https://hook.integromat.com/..."
+                value={pipelineSettings.webhookUrl || ''}
+                onChange={(e) => setPipelineSettings({ webhookUrl: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={6} md={3}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Target</InputLabel>
+                <Select
+                  label="Target"
+                  value={pipelineSettings.target || 'veo'}
+                  onChange={(e) => setPipelineSettings({ target: e.target.value })}
+                >
+                  <MenuItem value="veo">Veo</MenuItem>
+                  <MenuItem value="fliki">Fliki</MenuItem>
+                  <MenuItem value="nanobanana">Nano Banana</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={6} md={3} sx={{ display: 'flex', alignItems: 'center' }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={!!pipelineSettings.autoSendOnSave}
+                    onChange={(e) => setPipelineSettings({ autoSendOnSave: e.target.checked })}
+                  />
+                }
+                label="Auto-send on Save"
+              />
+            </Grid>
+            <Grid item xs={12} sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  const rows = normalizeAllToClips();
+                  downloadCsv(rows, 'chronicles23-clips.csv');
+                }}
+              >
+                Export CSV (All Panels)
+              </Button>
+              <Button
+                variant="contained"
+                disabled={!selectedPanel}
+                onClick={() => { if (selectedPanel) sendPanelToPipeline(selectedPanel); }}
+              >
+                Send Selected Panel Now
+              </Button>
+              <Button
+                variant="contained"
+                color="secondary"
+                disabled={savedPanels.length === 0}
+                onClick={() => sendAllToPipeline()}
+              >
+                Send All Panels Now
+              </Button>
+            </Grid>
+          </Grid>
+
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>Character Voice Mapping</Typography>
+            <Grid container spacing={1}>
+              {uniqueCharacters.map(name => (
+                <Grid item xs={12} sm={6} md={4} key={name}>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    label={`${name} → Voice_ID`}
+                    value={voiceMap[name] || ''}
+                    onChange={(e) => setVoiceMap({ [name]: e.target.value })}
+                  />
+                </Grid>
+              ))}
+              {uniqueCharacters.length === 0 && (
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="text.secondary">No dialogue characters detected yet.</Typography>
+                </Grid>
+              )}
+            </Grid>
+          </Box>
+        </CardContent>
+      </Card>
 
       {savedPanels.length === 0 ? (
         <Card sx={{ textAlign: 'center', padding: '40px' }}>
@@ -246,6 +464,20 @@ const PanelManager = () => {
                       </Grid>
                     )}
                   </Grid>
+
+                  <Box sx={{ mt: 3 }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Live Style Preview</Typography>
+                    <style>{`@keyframes kbZoom { 0% { transform: scale(1) translate(0,0);} 100% { transform: scale(1.1) translate(-10px, -6px);} }`}</style>
+                    <Box sx={{ position: 'relative', width: '100%', height: 220, overflow: 'hidden', borderRadius: 1, border: '1px solid #eee', mb: 1 }}>
+                      <img src={selectedPanel.image} alt="live" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: liveFilterCss, animation: kenBurns ? 'kbZoom 10s ease-in-out infinite alternate' : 'none' }} />
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
+                      {Object.keys(presets).map(name => (
+                        <Chip key={name} label={name} size="small" color={livePreset === name ? 'primary' : 'default'} onClick={() => setLivePreset(name)} />
+                      ))}
+                    </Box>
+                    <FormControlLabel control={<Switch checked={kenBurns} onChange={(e) => setKenBurns(e.target.checked)} />} label="Cinematic motion (Ken Burns)" />
+                  </Box>
                 </>
               )}
             </CardContent>
@@ -346,6 +578,22 @@ const PanelManager = () => {
           }}>
             Save Changes
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* AI Studio Dialog */}
+      <Dialog
+        open={aiOpen}
+        onClose={() => setAiOpen(false)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>AI Studio Pro</DialogTitle>
+        <DialogContent dividers>
+          <AIStudio selectedPanelId={selectedPanel?.id} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAiOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>
