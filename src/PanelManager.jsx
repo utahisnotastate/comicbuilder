@@ -29,16 +29,29 @@ import {
 import { usePanelStore } from './store';
 import ComicPanel from './ComicPanel';
 import * as htmlToImage from 'html-to-image';
+import { generateImage } from './utils/aiUtils';
+import { createRoot } from 'react-dom/client';
 
 const PanelManager = () => {
   const savedPanels = usePanelStore((state) => state.savedPanels);
   const loadPanelForEditing = usePanelStore((state) => state.loadPanelForEditing);
-  const removeElement = usePanelStore((state) => state.removeElement);
   const createNewPanel = usePanelStore((state) => state.createNewPanel);
-  const [selectedPanel, setSelectedPanel] = useState(null);
+  const reorderSavedPanels = usePanelStore((state) => state.reorderSavedPanels);
+  const addPanelStyle = usePanelStore((state) => state.addPanelStyle);
+  const removePanelStyle = usePanelStore((state) => state.removePanelStyle);
+
+  const [selectedPanelId, setSelectedPanelId] = useState(savedPanels[0]?.id || null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingPanel, setEditingPanel] = useState(null);
+
+  const [dragIndex, setDragIndex] = useState(null);
+  const [overIndex, setOverIndex] = useState(null);
+
+  const [newStyleName, setNewStyleName] = useState('');
+  const [creatingStyle, setCreatingStyle] = useState(false);
+
+  const selectedPanel = savedPanels.find(p => p.id === selectedPanelId) || savedPanels[0] || null;
 
   const handlePreview = (panel) => {
     setSelectedPanel(panel);
@@ -59,30 +72,40 @@ const PanelManager = () => {
 
   const handleExport = async (panel) => {
     try {
-      // Create a temporary element for export
+      // Create a temporary element for export and render the panel
       const tempDiv = document.createElement('div');
       tempDiv.style.width = '700px';
-      tempDiv.style.height = 'auto';
       tempDiv.style.position = 'absolute';
       tempDiv.style.left = '-9999px';
       document.body.appendChild(tempDiv);
 
-      // Render the panel
-      const panelElement = <ComicPanel panel={panel} />;
-      // Note: This is a simplified approach - in a real app you'd use ReactDOM.render
-      
-      const dataUrl = await htmlToImage.toPng(tempDiv, { 
-        cacheBust: true, 
-        pixelRatio: 3,
-        width: 700,
-        height: 'auto'
-      });
-      
-      const link = document.createElement('a');
-      link.download = `panel-${panel.id}.png`;
-      link.href = dataUrl;
-      link.click();
-      
+      const root = createRoot(tempDiv);
+      root.render(<ComicPanel panel={panel} exporting={true} />);
+      await new Promise(requestAnimationFrame);
+
+      const options = { cacheBust: true, pixelRatio: 3, backgroundColor: '#f4f1ea' };
+      const blob = await htmlToImage.toBlob(tempDiv, options);
+
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.download = `panel-${panel.id}.png`;
+        link.href = url;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } else {
+        const dataUrl = await htmlToImage.toPng(tempDiv, options);
+        const link = document.createElement('a');
+        link.download = `panel-${panel.id}.png`;
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+
+      root.unmount();
       document.body.removeChild(tempDiv);
     } catch (error) {
       console.error('Export failed:', error);
@@ -91,6 +114,21 @@ const PanelManager = () => {
 
   const handleCreateNew = () => {
     createNewPanel();
+  };
+
+  const handleCreateStyle = async () => {
+    if (!selectedPanel) return;
+    try {
+      setCreatingStyle(true);
+      const prompt = `${selectedPanel?.metadata?.imagePrompt || 'comic panel'} | style: ${newStyleName || 'variant'}`;
+      const imageUrl = await generateImage(prompt);
+      addPanelStyle(selectedPanel.id, { name: newStyleName || 'Variant', image: imageUrl });
+      setNewStyleName('');
+    } catch (e) {
+      console.error('Failed to create style', e);
+    } finally {
+      setCreatingStyle(false);
+    }
   };
 
   return (
@@ -124,63 +162,95 @@ const PanelManager = () => {
           </CardContent>
         </Card>
       ) : (
-        <Grid container spacing={3}>
-          {savedPanels.map((panel) => (
-            <Grid item xs={12} md={6} lg={4} key={panel.id}>
-              <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <CardContent sx={{ flexGrow: 1 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '15px' }}>
-                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                      {panel.metadata?.sceneTitle || 'Panel'} {panel.metadata?.panelNumber || ''}
-                    </Typography>
-                    <Box sx={{ display: 'flex', gap: '5px' }}>
-                      <Tooltip title="Preview">
-                        <IconButton size="small" onClick={() => handlePreview(panel)}>
-                          <VisibilityIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Edit">
-                        <IconButton size="small" onClick={() => handleEdit(panel)}>
-                          <EditIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Export">
-                        <IconButton size="small" onClick={() => handleExport(panel)}>
-                          <DownloadIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Delete">
-                        <IconButton size="small" onClick={() => handleDelete(panel.id)} color="error">
-                          <DeleteIcon />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
-                  </Box>
-                  
-                  {panel.metadata?.imagePrompt && (
-                    <Typography variant="body2" color="text.secondary" sx={{ marginBottom: '10px' }}>
-                      <strong>Image Prompt:</strong> {panel.metadata.imagePrompt}
-                    </Typography>
-                  )}
-                  
-                  <Box sx={{ display: 'flex', gap: '5px', marginBottom: '15px', flexWrap: 'wrap' }}>
-                    <Chip label={`${panel.elements.filter(el => el.type === 'dialogue').length} Dialogue`} size="small" />
-                    <Chip label={`${panel.elements.filter(el => el.type === 'tape').length} Tape`} size="small" />
-                  </Box>
-                  
-                  <Button
-                    variant="outlined"
-                    fullWidth
-                    onClick={() => loadPanelForEditing(panel.id)}
-                    sx={{ marginTop: 'auto' }}
+        <Box sx={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 3 }}>
+          {/* Left: Reorderable Panels List */}
+          <Card>
+            <CardContent>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>Panels</Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {savedPanels.map((panel, index) => (
+                  <Box
+                    key={panel.id}
+                    draggable
+                    onDragStart={() => setDragIndex(index)}
+                    onDragOver={(e) => { e.preventDefault(); setOverIndex(index); }}
+                    onDrop={() => { if (dragIndex !== null) { reorderSavedPanels(dragIndex, index); setDragIndex(null); setOverIndex(null); }}}
+                    onDragEnd={() => { setDragIndex(null); setOverIndex(null); }}
+                    onClick={() => setSelectedPanelId(panel.id)}
+                    sx={{
+                      display: 'flex', alignItems: 'center', gap: 1, p: 1, border: '1px solid', borderColor: (overIndex === index) ? 'primary.main' : '#e0e0e0', borderRadius: 1, cursor: 'pointer',
+                      backgroundColor: selectedPanelId === panel.id ? 'rgba(25,118,210,0.06)' : 'transparent'
+                    }}
                   >
-                    Load for Editing
-                  </Button>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
+                    <img src={panel.image} alt="thumb" style={{ width: 64, height: 48, objectFit: 'cover', borderRadius: 4 }} />
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="body2" noWrap>{panel.metadata?.sceneTitle || 'Panel'} {panel.metadata?.panelNumber || ''}</Typography>
+                      <Typography variant="caption" color="text.secondary">{panel.id.slice(0,8)}</Typography>
+                    </Box>
+                    <Tooltip title="Preview"><span><IconButton size="small" onClick={(e) => { e.stopPropagation(); handlePreview(panel); }}><VisibilityIcon fontSize="inherit" /></IconButton></span></Tooltip>
+                    <Tooltip title="Export"><span><IconButton size="small" onClick={(e) => { e.stopPropagation(); handleExport(panel); }}><DownloadIcon fontSize="inherit" /></IconButton></span></Tooltip>
+                    <Tooltip title="Load for Editing"><span><IconButton size="small" onClick={(e) => { e.stopPropagation(); loadPanelForEditing(panel.id); }}><EditIcon fontSize="inherit" /></IconButton></span></Tooltip>
+                  </Box>
+                ))}
+              </Box>
+            </CardContent>
+          </Card>
+
+          {/* Right: Image Styles Column */}
+          <Card>
+            <CardContent>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>Image Styles</Typography>
+              {!selectedPanel ? (
+                <Typography color="text.secondary">Select a panel to manage its styles.</Typography>
+              ) : (
+                <>
+                  <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                    <TextField size="small" label="New style name" value={newStyleName} onChange={(e) => setNewStyleName(e.target.value)} />
+                    <Button variant="contained" disabled={creatingStyle} onClick={handleCreateStyle}>{creatingStyle ? 'Creating…' : 'Create Style'}</Button>
+                  </Box>
+
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>Compare</Typography>
+                  <Box sx={{ display: 'flex', gap: 2, overflowX: 'auto', p: 1, border: '1px solid #eee', borderRadius: 1, mb: 2 }}>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <img src={selectedPanel.image} alt="base" style={{ width: 200, height: 130, objectFit: 'cover', borderRadius: 6 }} />
+                      <Typography variant="caption">Base</Typography>
+                    </Box>
+                    {(selectedPanel.styles || []).map(style => (
+                      <Box key={style.id} sx={{ textAlign: 'center' }}>
+                        <img src={style.image} alt={style.name} style={{ width: 200, height: 130, objectFit: 'cover', borderRadius: 6 }} />
+                        <Typography variant="caption">{style.name}</Typography>
+                      </Box>
+                    ))}
+                  </Box>
+
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>All Styles</Typography>
+                  <Grid container spacing={2}>
+                    {(selectedPanel.styles || []).map(style => (
+                      <Grid item xs={12} sm={6} md={4} key={style.id}>
+                        <Card>
+                          <CardContent>
+                            <Box sx={{ position: 'relative' }}>
+                              <img src={style.image} alt={style.name} style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: 6 }} />
+                              <IconButton size="small" color="error" sx={{ position: 'absolute', top: 4, right: 4 }} onClick={() => removePanelStyle(selectedPanel.id, style.id)}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Box>
+                            <Typography variant="body2" sx={{ mt: 1 }}>{style.name}</Typography>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    ))}
+                    {(selectedPanel.styles || []).length === 0 && (
+                      <Grid item xs={12}>
+                        <Typography variant="body2" color="text.secondary">No styles yet. Create one to compare variants.</Typography>
+                      </Grid>
+                    )}
+                  </Grid>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </Box>
       )}
 
       {/* Preview Dialog */}
@@ -200,8 +270,8 @@ const PanelManager = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setPreviewOpen(false)}>Close</Button>
-          <Button 
-            variant="contained" 
+          <Button
+            variant="contained"
             onClick={() => selectedPanel && handleExport(selectedPanel)}
           >
             Export Panel

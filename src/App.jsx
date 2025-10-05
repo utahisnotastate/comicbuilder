@@ -15,12 +15,12 @@ function App() {
   };
 
   return (
-    <Box sx={{ 
+    <Box sx={{
       background: 'linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)',
-      minHeight: '100vh', 
-      fontFamily: '"Roboto", sans-serif' 
+      minHeight: '100vh',
+      fontFamily: '"Roboto", sans-serif'
     }}>
-      <Box sx={{ 
+      <Box sx={{
         background: 'rgba(255, 255, 255, 0.1)',
         backdropFilter: 'blur(10px)',
         borderBottom: '1px solid rgba(255, 255, 255, 0.2)',
@@ -78,6 +78,7 @@ function App() {
               <Tab label="Asset Manager" value="assets" />
               <Tab label="AI Studio" value="ai" />
               <Tab label="Panel Editor" value="editor" />
+              <Tab label="Panels" value="panels" />
               <Tab label="Project Composer" value="composer" />
             </Tabs>
       </Box>
@@ -85,6 +86,7 @@ function App() {
       {view === 'assets' && <AssetManager />}
       {view === 'ai' && <AIStudio />}
       {view === 'editor' && <Editor />}
+      {view === 'panels' && <PanelManager />}
       {view === 'composer' && <ProjectComposer />}
     </Box>
   );

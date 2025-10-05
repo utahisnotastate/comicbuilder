@@ -607,10 +607,27 @@ const ControlPanel = ({ onExport }) => {
               backgroundColor: 'rgba(255,255,255,0.2)',
               '&:hover': {
                 backgroundColor: 'rgba(255,255,255,0.3)',
-              }
+              },
+              marginBottom: '10px'
             }}
           >
             Generate Panel Image
+          </Button>
+          <Button
+            variant="outlined"
+            color="inherit"
+            fullWidth
+            onClick={saveActivePanel}
+            sx={{
+              borderColor: 'rgba(255,255,255,0.6)',
+              color: 'white',
+              '&:hover': {
+                borderColor: 'rgba(255,255,255,0.8)',
+                backgroundColor: 'rgba(255,255,255,0.1)'
+              }
+            }}
+          >
+            Add to Panels
           </Button>
         </CardContent>
       </Card>

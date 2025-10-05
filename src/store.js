@@ -9,6 +9,7 @@ const createNewPanel = () => ({
   paperTexture: 'url("https://www.transparenttextures.com/patterns/paper.png")',
   font: '"Special Elite", monospace',
   elements: [], // Start with no elements for a cleaner UX
+  styles: [], // Per-panel style variants
 });
 
 // Simplified history implementation
@@ -167,5 +168,38 @@ export const usePanelStore = create((set, get) => ({
         const state = get();
         // This will be handled by the UI to show a preview
         return state.activePanel;
+      },
+
+      // Reorder saved panels
+      reorderSavedPanels: (fromIndex, toIndex) => {
+        const state = get();
+        const panels = [...state.savedPanels];
+        if (fromIndex < 0 || toIndex < 0 || fromIndex >= panels.length || toIndex >= panels.length) return;
+        const [moved] = panels.splice(fromIndex, 1);
+        panels.splice(toIndex, 0, moved);
+        set({ savedPanels: panels });
+      },
+
+      // Add a style variant to a panel
+      addPanelStyle: (panelId, style) => {
+        const state = get();
+        const panels = state.savedPanels.map(p => {
+          if (p.id !== panelId) return p;
+          const nextStyles = Array.isArray(p.styles) ? [...p.styles] : [];
+          nextStyles.push({ id: style.id || uuidv4(), name: style.name || 'Style', image: style.image });
+          return { ...p, styles: nextStyles };
+        });
+        set({ savedPanels: panels });
+      },
+
+      // Remove a style variant from a panel
+      removePanelStyle: (panelId, styleId) => {
+        const state = get();
+        const panels = state.savedPanels.map(p => {
+          if (p.id !== panelId) return p;
+          const nextStyles = (p.styles || []).filter(s => s.id !== styleId);
+          return { ...p, styles: nextStyles };
+        });
+        set({ savedPanels: panels });
       },
 }));

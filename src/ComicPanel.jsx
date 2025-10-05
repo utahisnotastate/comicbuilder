@@ -134,7 +134,7 @@ const Element = ({ element }) => {
   );
 };
 
-const ComicPanel = React.forwardRef(({ panel: propPanel, ...props }, ref) => {
+const ComicPanel = React.forwardRef(({ panel: propPanel, exporting = false, ...props }, ref) => {
   const storePanel = usePanelStore((state) => state.activePanel);
   const panel = propPanel || storePanel;
 
@@ -148,7 +148,7 @@ const ComicPanel = React.forwardRef(({ panel: propPanel, ...props }, ref) => {
       className="panel-wrapper"
       style={{
         ...styles.wrapper,
-        backgroundImage: panel.paperTexture,
+        backgroundImage: exporting ? 'none' : panel.paperTexture,
         fontFamily: panel.font,
       }}
     >

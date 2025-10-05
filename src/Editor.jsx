@@ -1,5 +1,5 @@
 // src/Editor.jsx
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useState } from 'react';
 import { Box, Typography } from '@mui/material';
 import { usePanelStore } from './store';
 import ComicPanel from './ComicPanel';
@@ -8,29 +8,53 @@ import * as htmlToImage from 'html-to-image';
 
 const Editor = () => {
   const panelRef = useRef();
+  const [exporting, setExporting] = useState(false);
 
-  const onExportClick = useCallback(() => {
+  const onExportClick = useCallback(async () => {
     if (panelRef.current === null) return;
 
-    htmlToImage.toPng(panelRef.current, { 
-      cacheBust: true, 
-      pixelRatio: 3,
-      backgroundColor: '#f4f1ea'
-    })
-      .then((dataUrl) => {
+    try {
+      setExporting(true);
+      await new Promise(requestAnimationFrame);
+
+      const options = {
+        cacheBust: true,
+        pixelRatio: 3,
+        backgroundColor: '#f4f1ea'
+      };
+
+      let blob = await htmlToImage.toBlob(panelRef.current, options);
+      if (!blob) {
+        // Fallback: toPng
+        const dataUrl = await htmlToImage.toPng(panelRef.current, options);
         const link = document.createElement('a');
         link.download = `comic-panel-${Date.now()}.png`;
         link.href = dataUrl;
+        document.body.appendChild(link);
         link.click();
-      })
-      .catch((err) => console.error('Export failed:', err));
+        document.body.removeChild(link);
+      } else {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `comic-panel-${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      console.error('Export failed:', err);
+    } finally {
+      setExporting(false);
+    }
   }, [panelRef]);
 
   return (
-    <Box sx={{ 
-      display: 'flex', 
-      justifyContent: 'center', 
-      alignItems: 'flex-start', 
+    <Box sx={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'flex-start',
       gap: '40px',
       padding: '40px',
       minHeight: 'calc(100vh - 200px)',
@@ -38,9 +62,9 @@ const Editor = () => {
       margin: '0 auto'
     }}>
       <ControlPanel onExport={onExportClick} />
-      <Box sx={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
+      <Box sx={{
+        display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         gap: '20px'
       }}>
@@ -55,7 +79,7 @@ const Editor = () => {
           <Typography variant="h6" sx={{ color: 'white', marginBottom: '15px', textAlign: 'center' }}>
             Comic Panel Preview
           </Typography>
-          <ComicPanel ref={panelRef} />
+          <ComicPanel ref={panelRef} exporting={exporting} />
         </Box>
       </Box>
     </Box>
