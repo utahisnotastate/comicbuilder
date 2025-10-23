@@ -2,6 +2,7 @@
 import React from 'react';
 import { Rnd } from 'react-rnd';
 import { usePanelStore } from './store';
+import { LAYOUT_PRESETS } from './store';
 
 const styles = {
   wrapper: {
@@ -22,6 +23,8 @@ const styles = {
   image: {
     display: 'block',
     width: '100%',
+    height: '100%',
+    objectFit: 'cover',
     borderRadius: '6px',
     boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
   },
@@ -47,7 +50,6 @@ const styles = {
     cursor: 'grab',
     borderRadius: '2px',
     position: 'relative',
-    backdropFilter: 'blur(0.5px)',
     '&:active': {
       cursor: 'grabbing',
     },
@@ -78,7 +80,7 @@ const styles = {
   },
 };
 
-const Element = ({ element }) => {
+const Element = ({ element, fontFamily }) => {
   const updateElement = usePanelStore((state) => state.updateElement);
   const removeElement = usePanelStore((state) => state.removeElement);
   const isTape = element.type === 'tape';
@@ -116,7 +118,7 @@ const Element = ({ element }) => {
         ...(isTape ? styles.tape : styles.dialogueBox),
         ...(isTape ? { backgroundColor: element.color || styles.tape.backgroundColor } : {}),
         transform: `rotate(${element.rotation}deg)`,
-        fontFamily: usePanelStore.getState().activePanel.font,
+        fontFamily: fontFamily,
         width: '100%',
         height: '100%',
         display: 'flex',
@@ -136,7 +138,14 @@ const Element = ({ element }) => {
 
 const ComicPanel = React.forwardRef(({ panel: propPanel, exporting = false, ...props }, ref) => {
   const storePanel = usePanelStore((state) => state.activePanel);
+  const layoutPresetKey = usePanelStore((state) => state.layoutPresetKey);
   const panel = propPanel || storePanel;
+
+  const preset = LAYOUT_PRESETS[layoutPresetKey] || LAYOUT_PRESETS.IG_PORTRAIT_4_5;
+  const previewWidth = 700;
+  const imageHeightPx = Math.round(previewWidth * (preset.height / preset.width));
+  const safeFont = 'Georgia, "Times New Roman", serif';
+  const effectiveFont = exporting ? safeFont : panel.font;
 
   // Separate tape elements (for image) from dialogue elements (for below)
   const tapeElements = panel.elements.filter(el => el.type === 'tape');
@@ -148,18 +157,27 @@ const ComicPanel = React.forwardRef(({ panel: propPanel, exporting = false, ...p
       className="panel-wrapper"
       style={{
         ...styles.wrapper,
+        width: `${previewWidth}px`,
         backgroundImage: exporting ? 'none' : panel.paperTexture,
-        fontFamily: panel.font,
+        fontFamily: effectiveFont,
+        ...(exporting ? {
+          backgroundColor: 'transparent',
+          padding: 0,
+          border: 'none',
+          boxShadow: 'none',
+          borderRadius: 0,
+        } : {}),
       }}
     >
-      {/* Image Container with Tape */}
-      <div style={styles.imageContainer}>
-        <img src={panel.image} alt="Comic panel background" style={styles.image} />
-        {tapeElements.map(el => <Element key={el.id} element={el} />)}
+      {/* Image Container with Tape and (on export) Dialogue overlays */}
+      <div style={{ ...styles.imageContainer, height: `${imageHeightPx}px` }}>
+        <img src={panel.image} alt="Comic panel background" style={styles.image} crossOrigin="anonymous" />
+        {tapeElements.map(el => <Element key={el.id} element={el} fontFamily={effectiveFont} />)}
+        {exporting ? dialogueElements.map(el => <Element key={el.id} element={el} fontFamily={effectiveFont} />) : null}
       </div>
 
-      {/* Dialogue Below Image */}
-      {dialogueElements.map(el => <Element key={el.id} element={el} />)}
+      {/* Dialogue Below Image (preview only) */}
+      {!exporting && dialogueElements.map(el => <Element key={el.id} element={el} fontFamily={effectiveFont} />)}
     </div>
   );
 });

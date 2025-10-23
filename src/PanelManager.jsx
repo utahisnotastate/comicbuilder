@@ -30,9 +30,9 @@ import {
   CloudUpload as CloudUploadIcon,
   AutoAwesome as AutoAwesomeIcon
 } from '@mui/icons-material';
-import { usePanelStore } from './store';
+import { usePanelStore, LAYOUT_PRESETS } from './store';
 import ComicPanel from './ComicPanel';
-import * as htmlToImage from 'html-to-image';
+import html2canvas from 'html2canvas';
 import { generateImage, downloadCsv } from './utils/aiUtils';
 import { createRoot } from 'react-dom/client';
 import AIStudio from './AIStudio';
@@ -54,6 +54,7 @@ const PanelManager = () => {
   const sendPanelToPipeline = usePanelStore((state) => state.sendPanelToPipeline);
   const sendAllToPipeline = usePanelStore((state) => state.sendAllToPipeline);
   const addSavedPanels = usePanelStore((state) => state.addSavedPanels);
+  const layoutPresetKey = usePanelStore((state) => state.layoutPresetKey);
 
   const fileInputRef = useRef(null);
   const [importing, setImporting] = useState(false);
@@ -110,21 +111,50 @@ const PanelManager = () => {
   };
 
   const handleExport = async (panel) => {
+    // Temporarily detach remote Google Fonts to avoid cross-origin CSS errors during export
+    const removedFontLinks = [];
+    let root = null;
+    const tempDiv = document.createElement('div');
     try {
       // Create a temporary element for export and render the panel
-      const tempDiv = document.createElement('div');
       tempDiv.style.width = '700px';
       tempDiv.style.position = 'absolute';
       tempDiv.style.left = '-9999px';
       document.body.appendChild(tempDiv);
 
-      const root = createRoot(tempDiv);
+      root = createRoot(tempDiv);
       root.render(<ComicPanel panel={panel} exporting={true} />);
+
+      // Remove remote Google Font links before capture
+      const fontLinks = Array.from(document.querySelectorAll('link[href*="fonts.googleapis.com"], link[href*="fonts.gstatic.com"]'));
+      fontLinks.forEach((link) => {
+        const parent = link.parentNode;
+        if (parent) {
+          removedFontLinks.push({ parent, link, next: link.nextSibling });
+          parent.removeChild(link);
+        }
+      });
+
       await new Promise(requestAnimationFrame);
 
-      const options = { cacheBust: true, pixelRatio: 3, backgroundColor: '#f4f1ea' };
-      const blob = await htmlToImage.toBlob(tempDiv, options);
+      // Determine target size from the selected layout preset
+      const preset = LAYOUT_PRESETS[layoutPresetKey] || LAYOUT_PRESETS.IG_PORTRAIT_4_5;
+      const rect = tempDiv.getBoundingClientRect ? tempDiv.getBoundingClientRect() : { width: tempDiv.clientWidth, height: tempDiv.clientHeight };
+      const currentWidth = Math.max(1, Math.round(rect.width || tempDiv.clientWidth || tempDiv.offsetWidth || 700));
+      const currentHeight = Math.max(1, Math.round(rect.height || tempDiv.clientHeight || tempDiv.offsetHeight || 700));
+      const targetHeight = Math.max(1, Math.round((preset.width / currentWidth) * currentHeight));
 
+      const canvas = await html2canvas(tempDiv, {
+        backgroundColor: null, // preserve transparency
+        scale: 1,
+        width: currentWidth,
+        height: currentHeight,
+        useCORS: true,
+        foreignObjectRendering: true,
+        removeContainer: true,
+      });
+
+      let blob = await new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'));
       if (blob) {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -135,7 +165,7 @@ const PanelManager = () => {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
       } else {
-        const dataUrl = await htmlToImage.toPng(tempDiv, options);
+        const dataUrl = canvas.toDataURL('image/png');
         const link = document.createElement('a');
         link.download = `panel-${panel.id}.png`;
         link.href = dataUrl;
@@ -143,11 +173,17 @@ const PanelManager = () => {
         link.click();
         document.body.removeChild(link);
       }
-
-      root.unmount();
-      document.body.removeChild(tempDiv);
     } catch (error) {
       console.error('Export failed:', error);
+    } finally {
+      // Restore any removed font links
+      for (const { parent, link, next } of removedFontLinks) {
+        try {
+          parent.insertBefore(link, next || null);
+        } catch (_) {}
+      }
+      try { if (root) root.unmount(); } catch (_) {}
+      try { if (tempDiv && tempDiv.parentNode) tempDiv.parentNode.removeChild(tempDiv); } catch (_) {}
     }
   };
 

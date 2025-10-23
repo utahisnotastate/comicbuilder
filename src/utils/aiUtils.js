@@ -2,7 +2,7 @@
 
 // --- Pluggable AI Image Providers ---
 const imageProviders = {};
-let activeImageProvider = 'placeholder';
+let activeImageProvider = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_USE_VERTEX === 'true') ? 'vertex' : 'placeholder';
 
 const ensureProvider = (name) => {
   if (!imageProviders[name]) throw new Error(`Image provider not registered: ${name}`);
@@ -37,6 +37,51 @@ registerImageProvider('placeholder', async (prompt, options = {}) => {
   const ctl = controlType ? `+CTL:${encodeURIComponent(controlType)}` : '';
   const text = `AI+${encodeURIComponent(style)}+${quality}%25${ctl}`;
   return `https://via.placeholder.com/${width}x${height}/${bg}/${fg}?text=${text}`;
+});
+
+// Google Cloud Vertex AI provider (Imagen 3)
+registerImageProvider('vertex', async (prompt, options = {}) => {
+  const {
+    negativePrompt = '',
+    width = 1024,
+    height = 1024,
+    style = 'realistic', // e.g., 'realistic', 'comic', 'anime', 'watercolor', 'oil', 'sketch'
+    seed,
+    n = 1,
+    fast = false,
+    controlImageUrl = '',
+    mimeType = 'image/png',
+    uploadToGCS = true,
+    bucket = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GCS_BUCKET) || ''
+  } = options || {};
+
+  const body = {
+    prompt,
+    negativePrompt,
+    width,
+    height,
+    style,
+    seed,
+    n,
+    fast,
+    controlImageUrl,
+    mimeType,
+    uploadToGCS,
+    bucket
+  };
+
+  const resp = await fetch('/api/vertex/generate-image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(`Vertex image generation failed (${resp.status}): ${text}`);
+  }
+  const json = await resp.json();
+  return json?.url || null;
 });
 
 // Function to generate an image via the active provider

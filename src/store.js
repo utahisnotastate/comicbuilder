@@ -5,6 +5,14 @@ import { panelToClipRows, panelsToClipRows } from './utils/aiUtils';
 import { generateDialogue } from './utils/llmUtils';
 import { captionImage } from './utils/visionUtils';
 
+// Common social-media-friendly layout presets (export target sizes)
+export const LAYOUT_PRESETS = {
+  IG_PORTRAIT_4_5: { key: 'IG_PORTRAIT_4_5', name: 'Instagram Portrait 4:5 (1080×1350)', width: 1080, height: 1350 },
+  IG_SQUARE_1_1: { key: 'IG_SQUARE_1_1', name: 'Square 1:1 (1080×1080)', width: 1080, height: 1080 },
+  LANDSCAPE_16_9: { key: 'LANDSCAPE_16_9', name: 'Landscape 16:9 (1920×1080)', width: 1920, height: 1080 },
+  STORY_9_16: { key: 'STORY_9_16', name: 'Story/Reel 9:16 (1080×1920)', width: 1080, height: 1920 },
+};
+
 // Helper function for creating a new, blank panel
 const createNewPanel = () => ({
   id: uuidv4(),
@@ -66,6 +74,7 @@ export const usePanelStore = create((set, get) => ({
   // STATE
   savedPanels: [],
   activePanel: createNewPanel(),
+  layoutPresetKey: 'IG_PORTRAIT_4_5',
   pipelineSettings: { webhookUrl: '', autoSendOnSave: false, target: 'veo' },
   voiceMap: {},
   story: { theme: '', logline: '', beats: [], characters: [] },
@@ -75,6 +84,10 @@ export const usePanelStore = create((set, get) => ({
   // ACTIONS
   setActivePanel: (panel) => {
     set({ activePanel: panel });
+  },
+
+  setLayoutPreset: (key) => {
+    if (LAYOUT_PRESETS[key]) set({ layoutPresetKey: key });
   },
 
   saveActivePanel: async () => {

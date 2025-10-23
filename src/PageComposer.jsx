@@ -15,7 +15,7 @@ import {
   CardContent,
   Chip
 } from '@mui/material';
-import * as htmlToImage from 'html-to-image';
+import html2canvas from 'html2canvas';
 
 // Simplified renderer for previews and final page layout
 const PanelRenderer = ({ panel, isPreview = false }) => (
@@ -137,18 +137,20 @@ const PageComposer = () => {
     const landscape = { width: 3075, height: 1988 };
     const dims = orientation === 'landscape' ? landscape : portrait;
 
-    const options = {
+    const element = pageRef.current;
+    const scale = dims.width / element.offsetWidth;
+
+    html2canvas(element, {
+      backgroundColor: '#ffffff',
+      scale,
       width: dims.width,
       height: dims.height,
-      style: {
-        transform: `scale(${dims.width / pageRef.current.offsetWidth})`,
-        transformOrigin: 'top left',
-        margin: 0,
-      }
-    };
-
-    htmlToImage.toPng(pageRef.current, options)
-      .then((dataUrl) => {
+      useCORS: true,
+      foreignObjectRendering: true,
+      removeContainer: true,
+    })
+      .then((canvas) => {
+        const dataUrl = canvas.toDataURL('image/png');
         const link = document.createElement('a');
         link.download = `comic-page-${orientation}.png`;
         link.href = dataUrl;
